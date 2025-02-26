@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<solution valuation="-1758">
+  <assignment variable="transmissionBC" value="1500" />
+  <assignment variable="transmissionAB" value="1500" />
+  <assignment variable="transmissionCB" value="1500" />
+  <assignment variable="transmissionBA" value="0" />
+  <assignment variable="gasCapacityC" value="1" />
+  <assignment variable="gasCapacityA" value="1" />
+  <assignment variable="gasCapacityB" value="2" />
+  <assignment variable="solarCapacityC" value="4" />
+  <assignment variable="solarCapacityA" value="5" />
+  <assignment variable="solarCapacityB" value="2" />
+  <assignment variable="gasFactorA" value="0" />
+  <assignment variable="gasFactorC" value="0" />
+  <assignment variable="gasFactorB" value="20" />
+</solution>
