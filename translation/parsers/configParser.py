@@ -18,5 +18,11 @@ class ConfigParserClass:
     def set_logger(self, logger):
         self.logger = logger
         self.logger.info("Logger set in config parser")
+
+    def get_countries(self):
+        return self.config['countries']
+    
+    def get_year(self):
+        return str(self.config['year'])
     
 

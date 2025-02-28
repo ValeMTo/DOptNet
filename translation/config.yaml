@@ -4,3 +4,8 @@ config:
   logging:
     level: "DEBUG"
     file: "/var/log/app.log"
+
+  outline:
+    countries: ['ZM', 'ZW', 'MZ']
+    year: 2050
+    #scenario: "ssp5-2.6"
