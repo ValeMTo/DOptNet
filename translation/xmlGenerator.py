@@ -1,7 +1,5 @@
 import xml.etree.ElementTree as ET
 
-
-
 class XMLGeneratorClass:
     def __init__(self, logger):
         self.logger = logger
@@ -14,53 +12,83 @@ class XMLGeneratorClass:
         })
 
         return instance
+    
+    def add_presentation(name, maxConstraintArity, maximize, format):
+        instance = ET.SubElement(instance, "presentation", {
+            "name": name,
+            "maxConstraintArity": maxConstraintArity,
+            "maximize": maximize,
+            "format": format
+        })
 
-# Just an example from cap_factor_three_states -- to delete in the 1.0 version
-def EXAMPLE(output_file):
-    instance = ET.Element("instance", {
-        "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-        "xsi:noNamespaceSchemaLocation": "src/frodo2/algorithms/XCSPschemaJaCoP.xsd"
-    })
+        return instance
+    
+    def add_agents(instance, agent_names):
+        instance = ET.SubElement(instance, "agents", {"nbAgents": len(agent_names)})
+        for agent_name in agent_names:
+            ET.SubElement(instance, "agent", {"name": agent_name})
+        
+        return instance
+    
+    def add_domains(instance):
+        instance = ET.SubElement(instance, "domains")
+        #TODO: change the domain values in a more dynamic way
+        domain_values = {
+            "installed_capacity": range(0, 10000, 100),
+            "capacity_factor": range(0, 101, 10),
+            "transmission_capacity": range(0, 5000, 50),
+        }
+        for name, values in domain_values.items():
+            ET.SubElement(instance, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
 
-    presentation = ET.SubElement(instance, "presentation", {
-        "name": "three_states",
-        "maxConstraintArity": "7",
-        "maximize": "true",
-        "format": "XCSP 2.1_FRODO"
-    })
 
-    agents = ET.SubElement(instance, "agents", {"nbAgents": "3"})
-    for agent_name in ["a", "b", "c"]:
-        ET.SubElement(agents, "agent", {"name": agent_name})
+    def add_variables(instance, technologies, countries):
+        for technology in technologies:
+            for country in countries:
+                instance = ET.SubElement(instance, "variable", {"name": f"{technology}_{country}", "domain": "capacity", "agent": country})
+                instance = ET.SubElement(instance, "variable", {"name": f"{technology}_{country}_factor", "domain": "capacity_factor", "agent": country})
 
-    domains = ET.SubElement(instance, "domains")
-    domain_values = {
-        "new_capacity": "0 1 2 3 4 5 6 7 8 9 10",
-        "capacity_factor": "0 10 20 21 22 30 40 50 60 70 80 90 100",
-        "transmission_capacity_AB": "0 500 1000 1500 2000",
-        "transmission_capacity_BC": "0 500 1000 1500"
-    }
-    for name, values in domain_values.items():
-        ET.SubElement(domains, "domain", {"name": name, "nbValues": str(len(values.split()))}).text = values
+        # TODO: change once the countries are not only neighboring
+        for country in countries:
+            for country2 in countries:
+                if country != country2:
+                    instance = ET.SubElement(instance, "variable", {"name": f"transmission_{country}_{country2}", "domain": "transmission_capacity", "agent": country})
 
-    variables = ET.SubElement(instance, "variables")
-    variable_data = [
-        ("solarCapacityA", "new_capacity", "a"),
-        ("solarCapacityB", "new_capacity", "b"),
-        ("solarCapacityC", "new_capacity", "c"),
-        ("gasCapacityA", "new_capacity", "a"),
-        ("gasCapacityB", "new_capacity", "b"),
-        ("gasCapacityC", "new_capacity", "c"),
-        ("gasFactorA", "capacity_factor", "a"),
-        ("gasFactorB", "capacity_factor", "b"),
-        ("gasFactorC", "capacity_factor", "c"),
-        ("transmissionAB", "transmission_capacity_AB", "a"),
-        ("transmissionBC", "transmission_capacity_BC", "b"),
-        ("transmissionBA", "transmission_capacity_AB", "b"),
-        ("transmissionCB", "transmission_capacity_BC", "c")
-    ]
-    for name, domain, agent in variable_data:
-        ET.SubElement(variables, "variable", {"name": name, "domain": domain, "agent": agent})
+        return instance
+    
+    def add_constraints(instance):
+        raise NotImplementedError()
+    
+    def add_minimum_capacity_constraint(instance):
+        raise NotImplementedError()
 
-    tree = ET.ElementTree(instance)
-    tree.write(output_file, encoding="utf-8", xml_declaration=True)
+    def add_maximum_capacity_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_minimum_capacity_factor_constraint(instance):
+        raise NotImplementedError
+    
+    def add_maximum_capacity_factor_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_min_transmission_capacity_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_max_transmission_capacity_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_emission_cap_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_demand_constraint(instance):
+        raise NotImplementedError()
+    
+    def add_cost_constraint(instance):
+        raise NotImplementedError()
+    
+    def generate_xml(instance, output_file, xml_declaration=True):
+        tree = ET.ElementTree(instance)
+        tree.write(output_file, encoding="utf-8", xml_declaration=xml_declaration)
+
+
+
