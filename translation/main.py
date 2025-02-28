@@ -1,6 +1,6 @@
 from energyModel import EnergyModelClass
 from parsers.configParser import ConfigParserClass
-from parsers.zenodoParser import ZenodoParserClass
+from translation.parsers.localDataParser import localDataParserClass
 from xmlGenerator import XMLGeneratorClass
 import logging
 
@@ -20,7 +20,13 @@ if __name__ == "__main__":
     logger = create_logger(log_level, log_file)
     config_parser.set_logger(logger)
 
-    zenodo_parser = ZenodoParserClass(logger = logger)
+    zenodo_parser = localDataParserClass(logger = logger)
     model = EnergyModelClass(name = config_parser.get_problem_name(),logger = logger)
     xml_generator = XMLGeneratorClass(logger = logger)
+    logger.debug("All classes initialized")
+    logger.debug("Program started...")
+
+    
+
+    
     
