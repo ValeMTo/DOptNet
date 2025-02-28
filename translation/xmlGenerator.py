@@ -66,7 +66,7 @@ class XMLGeneratorClass:
         raise NotImplementedError()
     
     def add_minimum_capacity_factor_constraint(instance):
-        raise NotImplementedError
+        raise NotImplementedError()
     
     def add_maximum_capacity_factor_constraint(instance):
         raise NotImplementedError()
