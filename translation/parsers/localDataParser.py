@@ -5,14 +5,14 @@ class localDataParserClass:
         self.logger = logger
         self.logger.info("Local Data parser initialized")
     
-    def get_powerplants_data(self):
+    def get_powerplants_data(self, countries):
         self.logger.debug("Getting powerplants data")
 
         data = pd.read_csv('../data/custom_powerplants_ssp126_2050.csv')
 
         filtered_data = data[data['DateIn'] <= 2020]
         filtered_data = filtered_data[filtered_data['DateOut'] >= 2030]
-        filtered_data = filtered_data[filtered_data['Country'].isin(['ZM', 'ZW', 'MZ'])]
+        filtered_data = filtered_data[filtered_data['Country'].isin(countries)]
         
         grouped_data = filtered_data.groupby(['Fueltype', 'Technology', 'Country'])['Capacity'].sum().reset_index()
         grouped_data = grouped_data.rename(columns={'Fueltype': 'fueltype', 'Technology': 'technology', 'Country': 'country', 'Capacity': 'capacity'})
