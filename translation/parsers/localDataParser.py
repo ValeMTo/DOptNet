@@ -19,18 +19,24 @@ class localDataParserClass:
 
         return grouped_data
     
-    def get_annual_demand_data(self):
+    def get_annual_demand_data(self, year, countries):
         self.logger.debug("Getting demand data")
+
+        if not isinstance(year, str) or len(year) != 4 or not year.isdigit():
+            raise ValueError("Year must be a string of 4 digits")
+
+        if not isinstance(countries, list) or not all(isinstance(country, str) and len(country) == 2 for country in countries):
+            raise ValueError("Countries must be a list of strings with exactly 2 characters each")
 
         df = pd.read_csv('../data/demand_TEMBA_SSP1-2.6.csv')
 
         df = df.map(lambda x: round((x/(365*24*60*60))*10**6, 3)) # Convert from PJ/year to GW
 
         df['country'] = df.index.map(lambda x: x[:2])
-        filtered_data = df[df['Country'].isin(['ZM', 'ZW', 'MZ'])]
-        filtered_data = filtered_data[['2030', 'country']]
+        filtered_data = df[df['Country'].isin(countries)]
+        filtered_data = filtered_data[[str(year), 'country']]
         filtered_data.reset_index(drop=True, inplace=True)
-        filtered_data = filtered_data.rename(columns={'2030': 'annual_demand_2030_GW'})
+        filtered_data = filtered_data.rename(columns={str(year): 'annual_demand_{year}_GW'})
 
         return filtered_data
 
