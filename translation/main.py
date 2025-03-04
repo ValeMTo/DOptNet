@@ -15,16 +15,9 @@ def create_logger(log_level, log_file):
 
 
 if __name__ == "__main__":
-    config_parser = ConfigParserClass(file_path='config.yaml')
-    log_level, log_file = config_parser.get_log_info()
-    logger = create_logger(log_level, log_file)
-    config_parser.set_logger(logger)
+    model = EnergyModelClass()
 
-    zenodo_parser = localDataParserClass(logger = logger)
-    model = EnergyModelClass(name = config_parser.get_problem_name(),logger = logger)
-    xml_generator = XMLGeneratorClass(logger = logger)
-    logger.debug("All classes initialized")
-    logger.debug("Program started...")
+    model.collect_data()
 
     
 
