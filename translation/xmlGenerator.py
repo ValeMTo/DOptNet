@@ -5,7 +5,9 @@ class XMLGeneratorClass:
         self.logger = logger
         self.logger.info("XML generator initialized")
 
-    def create_frodo2_xml_head_instance():
+        self.instance = self.create_frodo2_xml_head_instance()
+
+    def create_frodo2_xml_head_instance(self):
         instance = ET.Element("instance", {
             "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
             "xsi:noNamespaceSchemaLocation": "src/frodo2/algorithms/XCSPschemaJaCoP.xsd"
@@ -13,82 +15,294 @@ class XMLGeneratorClass:
 
         return instance
     
-    def add_presentation(name, maxConstraintArity, maximize, format):
-        instance = ET.SubElement(instance, "presentation", {
+    def add_presentation(self, name, maxConstraintArity, maximize, format):
+        ET.SubElement(self.instance, "presentation", {
             "name": name,
             "maxConstraintArity": maxConstraintArity,
             "maximize": maximize,
             "format": format
         })
-
-        return instance
     
-    def add_agents(instance, agent_names):
-        instance = ET.SubElement(instance, "agents", {"nbAgents": len(agent_names)})
+    def add_agents(self, agent_names):
+        """Adds multiple agents inside a single <agents> element."""
+        agents_element = self.instance.find("agents")
+        if agents_element is None:
+            agents_element = ET.SubElement(self.instance, "agents")
+
         for agent_name in agent_names:
-            ET.SubElement(instance, "agent", {"name": agent_name})
-        
-        return instance
-    
-    def add_domains(instance):
-        instance = ET.SubElement(instance, "domains")
-        #TODO: change the domain values in a more dynamic way
-        domain_values = {
-            "installed_capacity": range(0, 10000, 100),
-            "capacity_factor": range(0, 101, 10),
-            "transmission_capacity": range(0, 5000, 50),
-        }
+            ET.SubElement(agents_element, "agent", {"name": agent_name})
+
+
+    def add_domains(self, domain_values):
+        """Adds multiple domains inside a single <domains> element."""
+        domains_element = self.instance.find("domains")
+        if domains_element is None:
+            domains_element = ET.SubElement(self.instance, "domains")
+              
         for name, values in domain_values.items():
-            ET.SubElement(instance, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
+            ET.SubElement(domains_element, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
 
+    def add_variables(self, technologies, agent_names):
+        """Adds multiple variables inside a single <variables> element."""
+        variables_element = self.instance.find("variables")
+        if variables_element is None:
+            variables_element = ET.SubElement(self.instance, "variables")
 
-    def add_variables(instance, technologies, countries):
         for technology in technologies:
-            for country in countries:
-                instance = ET.SubElement(instance, "variable", {"name": f"{technology}_{country}", "domain": "capacity", "agent": country})
-                instance = ET.SubElement(instance, "variable", {"name": f"{technology}_{country}_factor", "domain": "capacity_factor", "agent": country})
+            for agent in agent_names:
+                formatted_agent = agent.capitalize()
+                ET.SubElement(variables_element, "variable", {
+                    "name": f"{technology}{formatted_agent}Capacity", 
+                    "domain": "capacity_installed", 
+                    "agent": agent
+                })
+                ET.SubElement(variables_element, "variable", {
+                    "name": f"{technology}{formatted_agent}CapFactor", 
+                    "domain": "capacity_factor", 
+                    "agent": agent
+                })
 
-        # TODO: change once the countries are not only neighboring
-        for country in countries:
-            for country2 in countries:
-                if country != country2:
-                    instance = ET.SubElement(instance, "variable", {"name": f"transmission_{country}_{country2}", "domain": "transmission_capacity", "agent": country})
+        # TODO: change once the agent_names are not only neighboring
+        for agent in agent_names:
+            for agent2 in agent_names:
+                if agent != agent2:
+                    formatted_agent1 = agent.capitalize()
+                    formatted_agent2 = agent2.capitalize()
+                    ET.SubElement(variables_element, "variable", {
+                        "name": f"transmission{formatted_agent1}{formatted_agent2}",
+                        "domain": "transmission_capacity",
+                        "agent": agent
+                    })
+    
+    def add_predicate(self, name, parameters, functional):
+        """Adds a single predicate element with parameters and functional expression."""
+        predicates_element = self.instance.find("predicates")
+        if (predicates_element is None):
+            predicates_element = ET.SubElement(self.instance, "predicates")
+        
+        predicate_element = ET.SubElement(predicates_element, "predicate", {"name": name})
+        ET.SubElement(predicate_element, "parameters").text = parameters
+        expression_element = ET.SubElement(predicate_element, "expression")
+        ET.SubElement(expression_element, "functional").text = functional
 
-        return instance
-    
-    def add_constraints(instance):
-        raise NotImplementedError()
-    
-    def add_minimum_capacity_constraint(instance):
-        raise NotImplementedError()
+    def add_function(self, name, parameters, functional):
+        """Adds a single function element with parameters and functional expression."""
+        functions_element = self.instance.find("functions")
+        if (functions_element is None):
+            functions_element = ET.SubElement(self.instance, "functions")
+        
+        function_element = ET.SubElement(functions_element, "function", {"name": name})
+        ET.SubElement(function_element, "parameters").text = parameters
+        ET.SubElement(function_element, "expression").text = functional
 
-    def add_maximum_capacity_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_minimum_capacity_factor_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_maximum_capacity_factor_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_min_transmission_capacity_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_max_transmission_capacity_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_emission_cap_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_demand_constraint(instance):
-        raise NotImplementedError()
-    
-    def add_cost_constraint(instance):
-        raise NotImplementedError()
-    
-    def generate_xml(instance, output_file, xml_declaration=True):
-        tree = ET.ElementTree(instance)
-        tree.write(output_file, encoding="utf-8", xml_declaration=xml_declaration)
+    def add_constraint(self, name, arity, scope, reference, parameters):
+        """Adds a single constraint element with arity, scope and reference."""
+        constraints_element = self.instance.find("constraints")
+        if (constraints_element is None):
+            constraints_element = ET.SubElement(self.instance, "constraints")
+        
+        constraint_element = ET.SubElement(constraints_element, "constraint", {"name": name, "arity": arity, "scope": scope, "reference": reference})
+        ET.SubElement(constraint_element, "parameters").text = parameters
 
+    def find_predicate(self, name):
+        """Finds a predicate element by name."""
+        predicates_element = self.instance.find("predicates")
+        if predicates_element is None:
+            predicates_element = ET.SubElement(self.instance, "predicates")
+            return False
+        else:
+            for predicate in predicates_element.findall("predicate"):
+                if predicate.attrib["name"] == name:
+                    return True
+            return False
+        
+    def find_function(self, name):
+        """Finds a function element by name."""
+        functions_element = self.instance.find("functions")
+        if functions_element is None:
+            functions_element = ET.SubElement(self.instance, "functions")
+            return False
+        else:
+            for function in functions_element.findall("function"):
+                if function.attrib["name"] == name:
+                    return True
+            return False
 
+    def add_minimum_capacity_constraint(self, variable_name, min_capacity):
+        """Adds a constraint to the XML instance that enforces minimum installed capacity."""
+        
+        if not self.find_predicate("alreadyInstalledCapacity"):
+            self.add_predicate(
+                name="alreadyInstalledCapacity", 
+                parameters="int capacity int min_capacity", 
+                functional=boolean_ge("capacity", "min_capacity")
+            )
+        
+        self.add_constraint(
+            name="alreadyInstalledCapacity", 
+            arity="1", 
+            scope=variable_name, 
+            reference="alreadyInstalledCapacity",
+            parameters=f"{variable_name} {min_capacity}"
+        )
+
+    def add_maximum_capacity_constraint(self, variable_name, max_capacity):
+        """Adds a constraint to the XML instance that enforces maximum installed capacity."""
+        
+        if not self.find_predicate("withinMaxCapacity"):
+            self.add_predicate(
+                name="withinMaxCapacity", 
+                parameters="int capacity int max_capacity", 
+                functional=boolean_le("capacity", "max_capacity")
+            )
+        
+        self.add_constraint(
+            name="withinMaxCapacity", 
+            arity="1", 
+            scope=variable_name, 
+            reference="withinMaxCapacity",
+            parameters=f"{variable_name} {max_capacity}"
+        )
+    
+    def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
+        """Adds a constraint to the XML instance that enforces minimum capacity factor."""
+        
+        if not self.find_predicate("minimumCapacityFactor"):
+            self.add_predicate(
+                name="minimumCapacityFactor", 
+                parameters="int capacity_factor int min_capacity_factor", 
+                functional=boolean_ge("capacity_factor", "min_capacity_factor")
+            )
+        
+        self.add_constraint(
+            name="minimumCapacityFactor", 
+            arity="1", 
+            scope=variable_name, 
+            reference="minimumCapacityFactor",
+            parameters=f"{variable_name} {min_capacity_factor}"
+        )
+        
+    def add_maximum_capacity_factor_constraint(self, variable_name, max_capacity_factor):
+        """Adds a constraint to the XML instance that enforces maximum capacity factor."""
+        
+        if not self.find_predicate("maximumCapacityFactor"):
+            self.add_predicate(
+                name="maximumCapacityFactor", 
+                parameters="int capacity_factor int max_capacity_factor", 
+                functional=boolean_le("capacity_factor", "max_capacity_factor")
+            )
+        
+        self.add_constraint(
+            name="maximumCapacityFactor", 
+            arity="1", 
+            scope=variable_name, 
+            reference="maximumCapacityFactor",
+            parameters=f"{variable_name} {max_capacity_factor}"
+        )
+    
+    def add_min_transmission_capacity_constraint(self, instance):
+        raise NotImplementedError()
+    
+    def add_max_transmission_capacity_constraint(self, instance):
+        raise NotImplementedError()
+    
+    def add_emission_cap_constraint(self, instance):
+        raise NotImplementedError()
+    
+    def add_demand_constraint(self, instance):
+        raise NotImplementedError()
+    
+    def add_cost_constraint(self, instance):
+        raise NotImplementedError()
+    
+    def frame_xml(
+        self, 
+        name="defaultName", 
+        max_constraint_arity=1,
+        agent_names=None,
+        technologies=None
+    ):
+        
+        self.instance = self.create_frodo2_xml_head_instance()
+        self.instance = self.add_presentation(self.instance, name, max_constraint_arity, "True", "XCSP 2.1_FRODO")
+
+        self.instance = self.add_agents(self.instance, agent_names)
+        self.instance = self.add_domains(self.instance)
+        self.instance = self.add_variables(self.instance, technologies, agent_names)
+
+    def print_xml(self, output_file = "defaultName_problem.xml"):
+        tree = ET.ElementTre(self.instance)
+        tree.write(output_file, encoding="utf-8", xml_declaration=True)
+
+        self.logger.info(f"XML generated and saved to {output_file}")
+
+    def change_max_arity_contraints(self, max_arity):
+        self.instance.attrib["maxConstraintArity"] = max_arity
+
+def boolean_not(a):
+    return f"not({a})"
+
+def boolean_and(a, b):
+    return f"and({a}, {b})"
+
+def boolean_or(a, b):
+    return f"or({a}, {b})"
+
+def boolean_xor(a, b):
+    return f"xor({a}, {b})"
+
+def boolean_iff(a, b):
+    return f"iff({a}, {b})"
+
+def boolean_eq(a, b):
+    return f"eq({a}, {b})"
+
+def boolean_ne(a, b):
+    return f"ne({a}, {b})"
+
+def boolean_ge(a, b):
+    return f"ge({a}, {b})"
+
+def boolean_gt(a, b):
+    return f"gt({a}, {b})"
+
+def boolean_le(a, b):
+    return f"le({a}, {b})"
+
+def boolean_lt(a, b):
+    return f"lt({a}, {b})"
+
+# Integer Expressions
+def neg(a):
+    return f"neg({a})"
+
+def abs_val(a):
+    return f"abs({a})"
+
+def add(a, b):
+    return f"add({a}, {b})"
+
+def sub(a, b):
+    return f"sub({a}, {b})"
+
+def mul(a, b):
+    return f"mul({a}, {b})"
+
+def div(a, b):
+    return f"div({a}, {b})"
+
+def mod(a, b):
+    return f"mod({a}, {b})"
+
+def pow_val(a, b):
+    return f"pow({a}, {b})"
+
+def min_val(a, b):
+    return f"min({a}, {b})"
+
+def max_val(a, b):
+    return f"max({a}, {b})"
+
+def conditional(if_expr, true_expr, false_expr):
+    return f"if({if_expr}, {true_expr}, {false_expr})"
 
