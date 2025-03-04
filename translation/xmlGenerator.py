@@ -305,7 +305,6 @@ class XMLGeneratorClass:
     def add_cost_constraint(self, instance):
         raise NotImplementedError()
     
-    @outdated
     def frame_xml(
         self, 
         name="defaultName", 
@@ -321,7 +320,6 @@ class XMLGeneratorClass:
         self.instance = self.add_domains(self.instance)
         self.instance = self.add_variables(self.instance, technologies, agent_names)
 
-    @outdated
     def print_xml(self, output_file = "defaultName_problem.xml"):
         tree = ET.ElementTre(self.instance)
         tree.write(output_file, encoding="utf-8", xml_declaration=True)
