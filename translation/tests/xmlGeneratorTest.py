@@ -97,10 +97,12 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
             if "transmission" in name:
                 self.assertTrue(domain.startswith("transmission_capacity"), f"Invalid domain for {name}: {domain}")
-            elif "Capacity" in name:
+            elif "capacity" in name:
                 self.assertEqual(domain, "capacity_installed", f"Expected 'capacity_installed' for {name}, got {domain}")
-            elif "CapFactor" in name:
+            elif "capFactor" in name:
                 self.assertEqual(domain, "capacity_factor", f"Expected 'capacity_factor' for {name}, got {domain}")
+            else:
+                self.fail(f"Unknown variable name: {name}")
 
         if PRINT_INTERMIDIATE_XML:
             print(to_pretty_xml(self.xml_generator.instance))
@@ -155,6 +157,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
         function = function_list[0]
         self.assertEqual(function.attrib["name"], "total_cost")
+        self.assertEqual(function.attrib["return"], "int")
 
         parameters = function.find("parameters")
         self.assertIsNotNone(parameters, "Missing <parameters> in <function>")
@@ -240,7 +243,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
         constraint = constraints_element.find("constraint")
         self.assertIsNotNone(constraint, "Missing <constraint> element for alreadyInstalledCapacity")
-        self.assertEqual(constraint.attrib["name"], "alreadyInstalledCapacity")
+        self.assertEqual(constraint.attrib["name"], "alreadyInstalledCapacity_solarCapacityA")
         self.assertEqual(constraint.attrib["arity"], "1")
         self.assertEqual(constraint.attrib["scope"], "solarCapacityA")
         self.assertEqual(constraint.attrib["reference"], "alreadyInstalledCapacity")
@@ -251,6 +254,143 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
         if PRINT_INTERMIDIATE_XML:
             print(to_pretty_xml(self.xml_generator.instance))
+
+    def test_add_maximum_capacity_factor_constraint(self):
+        """Test if the maximum capacity factor constraint is correctly added."""
+
+        self.xml_generator.add_maximum_capacity_factor_constraint("gasFactorA", "90")
+
+        predicates_element = self.xml_generator.instance.find("predicates")
+        self.assertIsNotNone(predicates_element, "Missing <predicates> section")
+        self.assertTrue(self.xml_generator.find_predicate("maximumCapacityFactor"))
+
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        constraint = constraints_element.find("constraint")
+        self.assertIsNotNone(constraint, "Missing <constraint> element for maximumCapacityFactor")
+        self.assertEqual(constraint.attrib["name"], "maximumCapacityFactor_gasFactorA")
+        self.assertEqual(constraint.attrib["arity"], "1")
+        self.assertEqual(constraint.attrib["scope"], "gasFactorA")
+        self.assertEqual(constraint.attrib["reference"], "maximumCapacityFactor")
+
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        self.assertEqual(parameters.text, "gasFactorA 90")
+
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
+
+    def test_add_min_transmission_capacity_constraint(self):
+        """Test if the minimum transmission capacity constraint is correctly added."""
+
+        self.xml_generator.add_min_transmission_capacity_constraint("transmissionAB", "100")
+
+        predicates_element = self.xml_generator.instance.find("predicates")
+        self.assertIsNotNone(predicates_element, "Missing <predicates> section")
+        self.assertTrue(self.xml_generator.find_predicate("minimumTransmissionCapacity"))
+
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        constraint = constraints_element.find("constraint")
+        self.assertIsNotNone(constraint, "Missing <constraint> element for minimumTransmissionCapacity")
+        self.assertEqual(constraint.attrib["name"], "minimumTransmissionCapacity_transmissionAB")
+        self.assertEqual(constraint.attrib["arity"], "1")
+        self.assertEqual(constraint.attrib["scope"], "transmissionAB")
+        self.assertEqual(constraint.attrib["reference"], "minimumTransmissionCapacity")
+
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        self.assertEqual(parameters.text, "transmissionAB 100")
+
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
+
+    def test_add_max_transmission_capacity_constraint(self):
+        """Test if the maximum transmission capacity constraint is correctly added."""
+
+        self.xml_generator.add_max_transmission_capacity_constraint("transmissionBC", "500")
+
+        predicates_element = self.xml_generator.instance.find("predicates")
+        self.assertIsNotNone(predicates_element, "Missing <predicates> section")
+        self.assertTrue(self.xml_generator.find_predicate("maximumTransmissionCapacity"))
+
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        constraint = constraints_element.find("constraint")
+        self.assertIsNotNone(constraint, "Missing <constraint> element for maximumTransmissionCapacity")
+        self.assertEqual(constraint.attrib["name"], "maximumTransmissionCapacity_transmissionBC")
+        self.assertEqual(constraint.attrib["arity"], "1")
+        self.assertEqual(constraint.attrib["scope"], "transmissionBC")
+        self.assertEqual(constraint.attrib["reference"], "maximumTransmissionCapacity")
+
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        self.assertEqual(parameters.text, "transmissionBC 500")
+
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
+    def test_add_demand_constraint_per_agent(self):
+        """Test if the demand constraint per agent is correctly added."""
+
+        agent_name = "A"
+        max_demand = "10000"
+        technologies = ["solar", "wind", "gas"]
+
+        self.xml_generator.add_demand_constraint_per_agent(agent_name, max_demand, technologies)
+        predicates_element = self.xml_generator.instance.find("predicates")
+        self.assertIsNotNone(predicates_element, "Missing <predicates> section")
+        self.assertTrue(self.xml_generator.find_predicate("minDemandPerAgent"))
+
+        predicate = predicates_element.find("predicate")
+        self.assertIsNotNone(predicate, "Missing <predicate> element for minDemandPerAgent")
+        self.assertEqual(predicate.attrib["name"], "minDemandPerAgent")
+
+        parameters = predicate.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in <predicate>")
+
+        variables = [f"{technology}{agent_name}capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}capFactor" for technology in technologies]
+        variables.sort()
+        
+        expected_parameters = " ".join([f"int {variable}" for variable in variables]) + " int max_demand"
+        self.assertEqual(parameters.text, expected_parameters, "Incorrect <parameters> format in <predicate>")
+
+        expression = predicate.find("expression")
+        self.assertIsNotNone(expression, "Missing <expression> in <predicate>")
+
+        functional = expression.find("functional")
+        self.assertIsNotNone(functional, "Missing <functional> in <expression>")
+
+        # # Build expected functional expression
+        # expected_functional = f"ge({build_recursive_expression(technologies)}, max_demand)"
+        # self.assertEqual(functional.text, expected_functional, "Incorrect <functional> format in <predicate>")
+
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        constraint = constraints_element.find("constraint")
+        self.assertIsNotNone(constraint, "Missing <constraint> element for minDemandPerAgent")
+        self.assertEqual(constraint.attrib["name"], f"minDemandPerAgent_{agent_name}")
+        self.assertEqual(constraint.attrib["arity"], str(len(technologies) * 2))
+        
+        expected_scope = " ".join(variables)
+        self.assertEqual(constraint.attrib["scope"], expected_scope, "Incorrect <scope> format in <constraint>")
+        self.assertEqual(constraint.attrib["reference"], "minDemandPerAgent")
+
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        expected_parameters = f"{expected_scope} {max_demand}"
+        self.assertEqual(parameters.text, expected_parameters, "Incorrect <parameters> format in <constraint>")
+
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
 
     # def test_frame_xml(self):
     #     self.xml_generator.frame_xml(name="testName", max_constraint_arity=2, agent_names=["agent1", "agent2"], technologies=["tech1"])

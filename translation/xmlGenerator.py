@@ -52,12 +52,12 @@ class XMLGeneratorClass:
             for agent in agent_names:
                 formatted_agent = agent.capitalize()
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}Capacity", 
+                    "name": f"{technology}{formatted_agent}capacity", 
                     "domain": "capacity_installed", 
                     "agent": agent
                 })
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}CapFactor", 
+                    "name": f"{technology}{formatted_agent}capFactor", 
                     "domain": "capacity_factor", 
                     "agent": agent
                 })
@@ -91,7 +91,7 @@ class XMLGeneratorClass:
         if (functions_element is None):
             functions_element = ET.SubElement(self.instance, "functions")
         
-        function_element = ET.SubElement(functions_element, "function", {"name": name})
+        function_element = ET.SubElement(functions_element, "function", {"name": name, "return": "int"})
         ET.SubElement(function_element, "parameters").text = parameters
         ET.SubElement(function_element, "expression").text = functional
 
@@ -129,7 +129,7 @@ class XMLGeneratorClass:
             return False
 
     def add_minimum_capacity_constraint(self, variable_name, min_capacity):
-        """Adds a constraint to the XML instance that enforces minimum installed capacity."""
+        """Adds an hard constraint to the XML instance that enforces minimum installed capacity."""
         
         if not self.find_predicate("alreadyInstalledCapacity"):
             self.add_predicate(
@@ -139,7 +139,7 @@ class XMLGeneratorClass:
             )
         
         self.add_constraint(
-            name="alreadyInstalledCapacity", 
+            name=f"alreadyInstalledCapacity_{variable_name}", 
             arity="1", 
             scope=variable_name, 
             reference="alreadyInstalledCapacity",
@@ -147,7 +147,7 @@ class XMLGeneratorClass:
         )
 
     def add_maximum_capacity_constraint(self, variable_name, max_capacity):
-        """Adds a constraint to the XML instance that enforces maximum installed capacity."""
+        """Adds an hard constraint to the XML instance that enforces maximum installed capacity."""
         
         if not self.find_predicate("withinMaxCapacity"):
             self.add_predicate(
@@ -157,7 +157,7 @@ class XMLGeneratorClass:
             )
         
         self.add_constraint(
-            name="withinMaxCapacity", 
+            name=f"withinMaxCapacity_{variable_name}", 
             arity="1", 
             scope=variable_name, 
             reference="withinMaxCapacity",
@@ -165,7 +165,7 @@ class XMLGeneratorClass:
         )
     
     def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
-        """Adds a constraint to the XML instance that enforces minimum capacity factor."""
+        """Adds an hard constraint to the XML instance that enforces minimum capacity factor."""
         
         if not self.find_predicate("minimumCapacityFactor"):
             self.add_predicate(
@@ -175,7 +175,7 @@ class XMLGeneratorClass:
             )
         
         self.add_constraint(
-            name="minimumCapacityFactor", 
+            name=f"minimumCapacityFactor_{variable_name}", 
             arity="1", 
             scope=variable_name, 
             reference="minimumCapacityFactor",
@@ -183,7 +183,7 @@ class XMLGeneratorClass:
         )
         
     def add_maximum_capacity_factor_constraint(self, variable_name, max_capacity_factor):
-        """Adds a constraint to the XML instance that enforces maximum capacity factor."""
+        """Adds an hard constraint to the XML instance that enforces maximum capacity factor."""
         
         if not self.find_predicate("maximumCapacityFactor"):
             self.add_predicate(
@@ -193,28 +193,119 @@ class XMLGeneratorClass:
             )
         
         self.add_constraint(
-            name="maximumCapacityFactor", 
+            name=f"maximumCapacityFactor_{variable_name}", 
             arity="1", 
             scope=variable_name, 
             reference="maximumCapacityFactor",
             parameters=f"{variable_name} {max_capacity_factor}"
         )
     
-    def add_min_transmission_capacity_constraint(self, instance):
-        raise NotImplementedError()
+    def add_min_transmission_capacity_constraint(self, transmission_variable_name, min_transmission_capacity):
+        """Adds an hard constraint to the XML instance that enforces minimum transmission capacity."""
+        
+        if not self.find_predicate("minimumTransmissionCapacity"):
+            self.add_predicate(
+                name="minimumTransmissionCapacity", 
+                parameters="int transmission int min_transmission_capacity",
+                functional=boolean_ge("transmission", "min_transmission_capacity")
+            )
+        
+        self.add_constraint(
+            name=f"minimumTransmissionCapacity_{transmission_variable_name}",
+            arity="1",
+            scope=transmission_variable_name,
+            reference="minimumTransmissionCapacity",
+            parameters=f"{transmission_variable_name} {min_transmission_capacity}"
+        )
     
-    def add_max_transmission_capacity_constraint(self, instance):
-        raise NotImplementedError()
+    def add_max_transmission_capacity_constraint(self, transmission_variable_name, max_transmission_capacity):
+        """Adds an hard constraint to the XML instance that enforces maximum transmission capacity."""
+        
+        if not self.find_predicate("maximumTransmissionCapacity"):
+            self.add_predicate(
+                name="maximumTransmissionCapacity", 
+                parameters="int transmission int max_transmission_capacity",
+                functional=boolean_le("transmission", "max_transmission_capacity")
+            )
+        
+        self.add_constraint(
+            name=f"maximumTransmissionCapacity_{transmission_variable_name}",
+            arity="1",
+            scope=transmission_variable_name,
+            reference="maximumTransmissionCapacity",
+            parameters=f"{transmission_variable_name} {max_transmission_capacity}"
+        )
     
-    def add_emission_cap_constraint(self, instance):
-        raise NotImplementedError()
-    
-    def add_demand_constraint(self, instance):
-        raise NotImplementedError()
+    def add_emission_cap_constraint(self, agents, technolgies_emission_costs, max_emission):
+        """Adds an hard constraint to the XML instance that enforces maximum emission."""
+        def build_recursive_expression(technolgies_emission_costs):
+            technologies = technolgies_emission_costs.keys()
+            # Base case: If only one technology remains, return its multiplication
+            if len(technologies) == 1:
+                tech = technologies[0]
+                return f"mul({tech}Capacity, {tech}CapFactor)"
+
+            # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
+            return add(mul(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), mul(8760, technolgies_emission_costs[technologies[0]])), build_recursive_expression(technologies[1:]))
+        
+        technologies = technolgies_emission_costs.keys()
+        variables = [f"{technology}{agent_name}capacity" for technology in technologies for agent_name in agents]
+        variables += [f"{technology}{agent_name}capFactor" for technology in technologies for agent_name in agents]
+        variables.sort()
+
+        if not self.find_predicate(f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}"):
+            self.add_predicate(
+                name=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}", 
+                parameters=" ".join([f"int {variable}" for variable in variables]) + " int max_emission",
+                functional=boolean_le(build_recursive_expression(technolgies_emission_costs), "max_emission")
+            )
+
+        self.add_constraint(
+            name=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}", 
+            arity=str(len(variables)), 
+            scope=" ".join(variables), 
+            reference=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}",
+            parameters=f"{' '.join(variables)} {max_emission}"
+        )
+
+    def add_demand_constraint_per_agent(self, agent_name, max_demand, technologies):
+        """Adds an hard constraint to the XML instance that enforces maximum demand."""
+        def build_recursive_expression(technologies):
+            """Recursively builds the expression: 
+            add(add(mul(tech1Capacity, tech1CapFactor), mul(tech2Capacity, tech2CapFactor)), mul(tech3Capacity, tech3CapFactor))"""
+            
+            # Base case: If only one technology remains, return its multiplication
+            if len(technologies) == 1:
+                tech = technologies[0]
+                return f"mul({tech}Capacity, {tech}CapFactor)"
+
+            # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
+            return add(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), build_recursive_expression(technologies[1:]))
+            
+        variables = [f"{technology}{agent_name}capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}capFactor" for technology in technologies]
+
+        variables.sort()
+        
+        if not self.find_predicate("withinMaxDemand"):
+            self.add_predicate(
+                name="minDemandPerAgent", 
+                parameters=" ".join([f"int {variable}" for variable in variables]) + " int max_demand",
+                functional=boolean_ge(build_recursive_expression(technologies), "max_demand")
+            )
+        
+        self.add_constraint(
+            name=f"minDemandPerAgent_{agent_name}", 
+            arity=str(len(variables)), 
+            scope=" ".join(variables), 
+            reference="minDemandPerAgent",
+            parameters=f"{' '.join(variables)} {max_demand}"
+        )
     
     def add_cost_constraint(self, instance):
         raise NotImplementedError()
     
+    @outdated
     def frame_xml(
         self, 
         name="defaultName", 
@@ -230,12 +321,12 @@ class XMLGeneratorClass:
         self.instance = self.add_domains(self.instance)
         self.instance = self.add_variables(self.instance, technologies, agent_names)
 
+    @outdated
     def print_xml(self, output_file = "defaultName_problem.xml"):
         tree = ET.ElementTre(self.instance)
         tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
         self.logger.info(f"XML generated and saved to {output_file}")
-
     def change_max_arity_contraints(self, max_arity):
         self.instance.attrib["maxConstraintArity"] = max_arity
 
