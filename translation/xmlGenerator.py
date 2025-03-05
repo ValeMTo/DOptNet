@@ -15,10 +15,10 @@ class XMLGeneratorClass:
 
         return instance
     
-    def add_presentation(self, name, maxConstraintArity, maximize, format):
+    def add_presentation(self, name, maximize, format):
         ET.SubElement(self.instance, "presentation", {
             "name": name,
-            "maxConstraintArity": maxConstraintArity,
+            "maxConstraintArity": 1,
             "maximize": maximize,
             "format": format
         })
@@ -289,6 +289,9 @@ class XMLGeneratorClass:
             parameters=f"{' '.join(variables)} {max_emission}"
         )
 
+        if self.instance.attrib["maxConstraintArity"] < len(variables):
+            self.change_max_arity_contraints(len(variables))
+
     def add_demand_constraint_per_agent(self, agent_name, max_demand, technologies):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
         def build_recursive_expression(technologies):
@@ -325,6 +328,9 @@ class XMLGeneratorClass:
             reference="minDemandPerAgent",
             parameters=f"{' '.join(variables)} {max_demand}"
         )
+
+        if self.instance.attrib["maxConstraintArity"] < len(variables):
+            self.change_max_arity_contraints(len(variables))
     
     def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh):
         """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
@@ -347,6 +353,9 @@ class XMLGeneratorClass:
             reference=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
             parameters=f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}"
         )
+
+        if self.instance.attrib["maxConstraintArity"] < 2:
+            self.change_max_arity_contraints(2)
 
     def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW):
         """Adds a soft constraint to the XML instance that enforces maximum installing cost."""
