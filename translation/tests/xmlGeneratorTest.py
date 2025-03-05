@@ -175,7 +175,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
         self.xml_generator.add_constraint(
             name="withinInstalledCapacity",
-            arity="2",
+            arity=2,
             scope="capacity max_capacity",
             reference="withinInstalledCapacity",
             parameters="capacity max_capacity"

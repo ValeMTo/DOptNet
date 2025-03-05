@@ -7,6 +7,8 @@ class XMLGeneratorClass:
 
         self.instance = self.create_frodo2_xml_head_instance()
 
+        self.max_arity = 1
+
     def create_frodo2_xml_head_instance(self):
         instance = ET.Element("instance", {
             "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
@@ -18,7 +20,7 @@ class XMLGeneratorClass:
     def add_presentation(self, name, maximize, format):
         ET.SubElement(self.instance, "presentation", {
             "name": name,
-            "maxConstraintArity": 1,
+            "maxConstraintArity": str(self.max_arity),
             "maximize": maximize,
             "format": format
         })
@@ -101,8 +103,11 @@ class XMLGeneratorClass:
         if (constraints_element is None):
             constraints_element = ET.SubElement(self.instance, "constraints")
         
-        constraint_element = ET.SubElement(constraints_element, "constraint", {"name": name, "arity": arity, "scope": scope, "reference": reference})
+        constraint_element = ET.SubElement(constraints_element, "constraint", {"name": name, "arity": str(arity), "scope": scope, "reference": reference})
         ET.SubElement(constraint_element, "parameters").text = parameters
+
+        if arity > self.max_arity:
+            self.max_arity = int(arity)
 
     def find_predicate(self, name):
         """Finds a predicate element by name."""
@@ -143,7 +148,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"alreadyInstalledCapacity_{variable_name}", 
-            arity="1", 
+            arity=1, 
             scope=variable_name, 
             reference="alreadyInstalledCapacity",
             parameters=f"{variable_name} {min_capacity}"
@@ -164,7 +169,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"withinMaxCapacity_{variable_name}", 
-            arity="1", 
+            arity=1, 
             scope=variable_name, 
             reference="withinMaxCapacity",
             parameters=f"{variable_name} {max_capacity}"
@@ -185,7 +190,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"minimumCapacityFactor_{variable_name}", 
-            arity="1", 
+            arity=1, 
             scope=variable_name, 
             reference="minimumCapacityFactor",
             parameters=f"{variable_name} {min_capacity_factor}"
@@ -206,7 +211,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"maximumCapacityFactor_{variable_name}", 
-            arity="1", 
+            arity=1, 
             scope=variable_name, 
             reference="maximumCapacityFactor",
             parameters=f"{variable_name} {max_capacity_factor}"
@@ -227,7 +232,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"minimumTransmissionCapacity_{transmission_variable_name}",
-            arity="1",
+            arity=1,
             scope=transmission_variable_name,
             reference="minimumTransmissionCapacity",
             parameters=f"{transmission_variable_name} {min_transmission_capacity}"
@@ -248,7 +253,7 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"maximumTransmissionCapacity_{transmission_variable_name}",
-            arity="1",
+            arity=1,
             scope=transmission_variable_name,
             reference="maximumTransmissionCapacity",
             parameters=f"{transmission_variable_name} {max_transmission_capacity}"
@@ -289,8 +294,8 @@ class XMLGeneratorClass:
             parameters=f"{' '.join(variables)} {max_emission}"
         )
 
-        if self.instance.attrib["maxConstraintArity"] < len(variables):
-            self.change_max_arity_contraints(len(variables))
+        if len(variables) > self.max_arity:
+            self.max_arity = len(variables)
 
     def add_demand_constraint_per_agent(self, agent_name, max_demand, technologies):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
@@ -323,14 +328,14 @@ class XMLGeneratorClass:
         
         self.add_constraint(
             name=f"minDemandPerAgent_{agent_name}", 
-            arity=str(len(variables)), 
+            arity=len(variables), 
             scope=" ".join(variables), 
             reference="minDemandPerAgent",
             parameters=f"{' '.join(variables)} {max_demand}"
         )
 
-        if self.instance.attrib["maxConstraintArity"] < len(variables):
-            self.change_max_arity_contraints(len(variables))
+        if len(variables) > self.max_arity:
+            self.max_arity = len(variables)
     
     def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh):
         """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
@@ -348,14 +353,14 @@ class XMLGeneratorClass:
 
         self.add_constraint(
             name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
-            arity="2",
+            arity=2,
             scope=f"{variable_capacity_name} {variable_capFactor_name}",
             reference=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
             parameters=f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}"
         )
 
-        if self.instance.attrib["maxConstraintArity"] < 2:
-            self.change_max_arity_contraints(2)
+        if self.max_arity < 2:
+            self.max_arity = 2
 
     def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW):
         """Adds a soft constraint to the XML instance that enforces maximum installing cost."""
@@ -373,7 +378,7 @@ class XMLGeneratorClass:
 
         self.add_constraint(
             name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
-            arity="1",
+            arity=1,
             scope=f"{variable_capacity_name}",
             reference=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
             parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
@@ -401,9 +406,9 @@ class XMLGeneratorClass:
 
         self.logger.info(f"XML generated and saved to {output_file}")
 
-    def change_max_arity_contraints(self, max_arity):
+    def set_max_arity_contraints(self):
         """Changes the max arity of constraints in the XML instance."""
-        self.instance.attrib["maxConstraintArity"] = max_arity
+        self.instance.attrib["maxConstraintArity"] = str(self.max_arity)
 
 def boolean_not(a):
     return f"not({a})"
