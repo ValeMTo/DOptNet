@@ -130,6 +130,9 @@ class XMLGeneratorClass:
 
     def add_minimum_capacity_constraint(self, variable_name, min_capacity):
         """Adds an hard constraint to the XML instance that enforces minimum installed capacity."""
+
+        if not isinstance(min_capacity, int):
+            raise ValueError("min_capacity must be an integer")
         
         if not self.find_predicate("alreadyInstalledCapacity"):
             self.add_predicate(
@@ -148,6 +151,9 @@ class XMLGeneratorClass:
 
     def add_maximum_capacity_constraint(self, variable_name, max_capacity):
         """Adds an hard constraint to the XML instance that enforces maximum installed capacity."""
+
+        if not isinstance(max_capacity, int):
+            raise ValueError("max_capacity must be an integer")
         
         if not self.find_predicate("withinMaxCapacity"):
             self.add_predicate(
@@ -166,6 +172,9 @@ class XMLGeneratorClass:
     
     def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
         """Adds an hard constraint to the XML instance that enforces minimum capacity factor."""
+
+        if not isinstance(min_capacity_factor, int):
+            raise ValueError("min_capacity_factor must be an integer")
         
         if not self.find_predicate("minimumCapacityFactor"):
             self.add_predicate(
@@ -184,6 +193,9 @@ class XMLGeneratorClass:
         
     def add_maximum_capacity_factor_constraint(self, variable_name, max_capacity_factor):
         """Adds an hard constraint to the XML instance that enforces maximum capacity factor."""
+
+        if not isinstance(max_capacity_factor, int):
+            raise ValueError("max_capacity_factor must be an integer")
         
         if not self.find_predicate("maximumCapacityFactor"):
             self.add_predicate(
@@ -202,6 +214,9 @@ class XMLGeneratorClass:
     
     def add_min_transmission_capacity_constraint(self, transmission_variable_name, min_transmission_capacity):
         """Adds an hard constraint to the XML instance that enforces minimum transmission capacity."""
+
+        if not isinstance(min_transmission_capacity, int):
+            raise ValueError("min_transmission_capacity must be an integer")
         
         if not self.find_predicate("minimumTransmissionCapacity"):
             self.add_predicate(
@@ -221,6 +236,9 @@ class XMLGeneratorClass:
     def add_max_transmission_capacity_constraint(self, transmission_variable_name, max_transmission_capacity):
         """Adds an hard constraint to the XML instance that enforces maximum transmission capacity."""
         
+        if not isinstance(max_transmission_capacity, int):
+            raise ValueError("max_transmission_capacity must be an integer")
+
         if not self.find_predicate("maximumTransmissionCapacity"):
             self.add_predicate(
                 name="maximumTransmissionCapacity", 
@@ -248,6 +266,9 @@ class XMLGeneratorClass:
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
             return add(mul(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), mul(8760, technolgies_emission_costs[technologies[0]])), build_recursive_expression(technologies[1:]))
         
+        if not isinstance(max_emission, int):
+            raise ValueError("max_emission must be an integer")
+
         technologies = technolgies_emission_costs.keys()
         variables = [f"{technology}{agent_name}capacity" for technology in technologies for agent_name in agents]
         variables += [f"{technology}{agent_name}capFactor" for technology in technologies for agent_name in agents]
@@ -282,6 +303,9 @@ class XMLGeneratorClass:
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
             return add(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), build_recursive_expression(technologies[1:]))
             
+        if not isinstance(max_demand, int):
+            raise ValueError("max_demand must be an integer")
+        
         variables = [f"{technology}{agent_name}capacity" for technology in technologies]
         variables += [f"{technology}{agent_name}capFactor" for technology in technologies]
 
