@@ -232,7 +232,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
     def test_add_minimum_capacity_constraint(self):
         """Test if the minimum installed capacity constraint is correctly added."""
 
-        self.xml_generator.add_minimum_capacity_constraint("solarCapacityA", "500")
+        self.xml_generator.add_minimum_capacity_constraint("solarCapacityA", 500)
 
         predicates_element = self.xml_generator.instance.find("predicates")
         self.assertIsNotNone(predicates_element, "Missing <predicates> section")
@@ -258,7 +258,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
     def test_add_maximum_capacity_factor_constraint(self):
         """Test if the maximum capacity factor constraint is correctly added."""
 
-        self.xml_generator.add_maximum_capacity_factor_constraint("gasFactorA", "90")
+        self.xml_generator.add_maximum_capacity_factor_constraint("gasFactorA", 90)
 
         predicates_element = self.xml_generator.instance.find("predicates")
         self.assertIsNotNone(predicates_element, "Missing <predicates> section")
@@ -285,7 +285,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
     def test_add_min_transmission_capacity_constraint(self):
         """Test if the minimum transmission capacity constraint is correctly added."""
 
-        self.xml_generator.add_min_transmission_capacity_constraint("transmissionAB", "100")
+        self.xml_generator.add_min_transmission_capacity_constraint("transmissionAB", 100)
 
         predicates_element = self.xml_generator.instance.find("predicates")
         self.assertIsNotNone(predicates_element, "Missing <predicates> section")
@@ -312,7 +312,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
     def test_add_max_transmission_capacity_constraint(self):
         """Test if the maximum transmission capacity constraint is correctly added."""
 
-        self.xml_generator.add_max_transmission_capacity_constraint("transmissionBC", "500")
+        self.xml_generator.add_max_transmission_capacity_constraint("transmissionBC", 500)
 
         predicates_element = self.xml_generator.instance.find("predicates")
         self.assertIsNotNone(predicates_element, "Missing <predicates> section")
@@ -339,7 +339,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
         """Test if the demand constraint per agent is correctly added."""
 
         agent_name = "A"
-        max_demand = "10000"
+        max_demand = 10000
         technologies = ["solar", "wind", "gas"]
 
         self.xml_generator.add_demand_constraint_per_agent(agent_name, max_demand, technologies)
@@ -400,7 +400,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
         cost_per_MWh = 50
 
         # Add the operating cost constraint
-        self.xml_generator.add_operating_cost_constraint(weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh)
+        self.xml_generator.add_operating_cost_minimization_constraint(weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh)
 
         # Ensure the function is created
         functions_element = self.xml_generator.instance.find("functions")
@@ -420,7 +420,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
         # Check if expression exists
         expression = function.find("expression")
         self.assertIsNotNone(expression, "Missing <expression> in <function>")
-        self.assertEqual(expression.text, "neg(div(mul(mul(capacity, capFactor), mul(hours_per_year, cost_per_MWh)), weight))")
+        self.assertEqual(expression.text, "neg(div(mul(mul(capacity, capFactor), mul(hours_per_year, cost_per_MWh)), mul(weight, 100)))")
 
         # Ensure the constraint is created
         constraints_element = self.xml_generator.instance.find("constraints")
@@ -451,7 +451,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
         cost_per_MW = 1000
 
         # Add the installing cost constraint
-        self.xml_generator.add_installing_cost_constraint(weight, variable_capacity_name, previous_installed_capacity, cost_per_MW)
+        self.xml_generator.add_installing_cost_minimization_constraint(weight, variable_capacity_name, previous_installed_capacity, cost_per_MW)
 
         # Ensure the function is created
         functions_element = self.xml_generator.instance.find("functions")

@@ -367,7 +367,7 @@ class XMLGeneratorClass:
             arity="1",
             scope=f"{variable_capacity_name}",
             reference=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
-            parameters=f"{str(weight)} {variable_capacity_name} {previous_installed_capacity} {str(cost_per_MW)}"
+            parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
     
     def frame_xml(
