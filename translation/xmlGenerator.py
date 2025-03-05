@@ -261,10 +261,10 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 tech = technologies[0]
-                return f"mul({tech}Capacity, {tech}CapFactor)"
+                return mul(f"{tech}Capacity", f"{tech}CapFactor)")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), mul(8760, technolgies_emission_costs[technologies[0]])), build_recursive_expression(technologies[1:]))
+            return add(div(mul(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), mul(8760, technolgies_emission_costs[technologies[0]])), 100), build_recursive_expression(technologies[1:]))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
@@ -298,10 +298,10 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 tech = technologies[0]
-                return f"mul({tech}Capacity, {tech}CapFactor)"
+                return mul(f"{tech}Capacity", f"{tech}CapFactor)")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), build_recursive_expression(technologies[1:]))
+            return add(div(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), 100), build_recursive_expression(technologies[1:]))
             
         if not isinstance(max_demand, int):
             raise ValueError("max_demand must be an integer")
@@ -337,7 +337,7 @@ class XMLGeneratorClass:
                 name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}", 
                 parameters="int weight int capacity int capFactor int hours_per_year int cost_per_MWh",
                 # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                functional= neg(div(mul(mul("capacity", "capFactor"), mul("hours_per_year", "cost_per_MWh")), "weight"))
+                functional= neg(div(mul(mul("capacity", "capFactor"), mul("hours_per_year", "cost_per_MWh")), mul("weight", 100)))
             )
 
         self.add_constraint(
