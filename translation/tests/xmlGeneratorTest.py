@@ -391,6 +391,108 @@ class TestXMLGeneratorClass(unittest.TestCase):
         if PRINT_INTERMIDIATE_XML:
             print(to_pretty_xml(self.xml_generator.instance))
 
+    def test_add_operating_cost_constraint(self):
+        """Test if the operating cost constraint is correctly added."""
+
+        weight = 10000
+        variable_capacity_name = "solarAcapacity"
+        variable_capFactor_name = "solarAcapFactor"
+        cost_per_MWh = 50
+
+        # Add the operating cost constraint
+        self.xml_generator.add_operating_cost_constraint(weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh)
+
+        # Ensure the function is created
+        functions_element = self.xml_generator.instance.find("functions")
+        self.assertIsNotNone(functions_element, "Missing <functions> section")
+        function_name = f"minimize_operatingCost_solarA"
+        self.assertTrue(self.xml_generator.find_function(function_name))
+
+        # Find the function element
+        function = functions_element.find(f"function[@name='{function_name}']")
+        self.assertIsNotNone(function, f"Missing <function> element for {function_name}")
+
+        # Check if parameters are correctly set
+        parameters = function.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in <function>")
+        self.assertEqual(parameters.text, "int weight int capacity int capFactor int hours_per_year int cost_per_MWh")
+
+        # Check if expression exists
+        expression = function.find("expression")
+        self.assertIsNotNone(expression, "Missing <expression> in <function>")
+        self.assertEqual(expression.text, "neg(div(mul(mul(capacity, capFactor), mul(hours_per_year, cost_per_MWh)), weight))")
+
+        # Ensure the constraint is created
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        # Find the constraint element
+        constraint = constraints_element.find(f"constraint[@name='{function_name}']")
+        self.assertIsNotNone(constraint, f"Missing <constraint> element for {function_name}")
+        self.assertEqual(constraint.attrib["arity"], "2")
+        self.assertEqual(constraint.attrib["scope"], f"{variable_capacity_name} {variable_capFactor_name}")
+        self.assertEqual(constraint.attrib["reference"], function_name)
+
+        # Check if parameters are correctly set
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        self.assertEqual(parameters.text, f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}")
+
+        # Print XML output if enabled
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
+    def test_add_installing_cost_constraint(self):
+        """Test if the installing cost constraint is correctly added."""
+
+        weight = 20000
+        variable_capacity_name = "windBcapacity"
+        previous_installed_capacity = "300"
+        cost_per_MW = 1000
+
+        # Add the installing cost constraint
+        self.xml_generator.add_installing_cost_constraint(weight, variable_capacity_name, previous_installed_capacity, cost_per_MW)
+
+        # Ensure the function is created
+        functions_element = self.xml_generator.instance.find("functions")
+        self.assertIsNotNone(functions_element, "Missing <functions> section")
+        function_name = f"minimize_installingCost_windB"
+        self.assertTrue(self.xml_generator.find_function(function_name))
+
+        # Find the function element
+        function = functions_element.find(f"function[@name='{function_name}']")
+        self.assertIsNotNone(function, f"Missing <function> element for {function_name}")
+
+        # Check if parameters are correctly set
+        parameters = function.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in <function>")
+        self.assertEqual(parameters.text, "int weight int capacity int oldCapacity int cost_per_MW")
+
+        # Check if expression exists
+        expression = function.find("expression")
+        self.assertIsNotNone(expression, "Missing <expression> in <function>")
+        self.assertEqual(expression.text, "neg(div(mul(sub(capacity, oldCapacity), cost_per_MW), weight))")
+
+        # Ensure the constraint is created
+        constraints_element = self.xml_generator.instance.find("constraints")
+        self.assertIsNotNone(constraints_element, "Missing <constraints> section")
+
+        # Find the constraint element
+        constraint = constraints_element.find(f"constraint[@name='{function_name}']")
+        self.assertIsNotNone(constraint, f"Missing <constraint> element for {function_name}")
+        self.assertEqual(constraint.attrib["arity"], "1")
+        self.assertEqual(constraint.attrib["scope"], f"{variable_capacity_name}")
+        self.assertEqual(constraint.attrib["reference"], function_name)
+
+        # Check if parameters are correctly set
+        parameters = constraint.find("parameters")
+        self.assertIsNotNone(parameters, "Missing <parameters> in constraint")
+        self.assertEqual(parameters.text, f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}")
+
+        # Print XML output if enabled
+        if PRINT_INTERMIDIATE_XML:
+            print(to_pretty_xml(self.xml_generator.instance))
+
 
     # def test_frame_xml(self):
     #     self.xml_generator.frame_xml(name="testName", max_constraint_arity=2, agent_names=["agent1", "agent2"], technologies=["tech1"])

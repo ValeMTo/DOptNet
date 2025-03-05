@@ -302,8 +302,49 @@ class XMLGeneratorClass:
             parameters=f"{' '.join(variables)} {max_demand}"
         )
     
-    def add_cost_constraint(self, instance):
-        raise NotImplementedError()
+    def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh):
+        """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
+
+        if not isinstance(weight, int) or not isinstance(cost_per_MWh, int):
+            raise ValueError("weight and cost_per_MW must be integers")
+
+        if not self.find_function(f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}"):
+            self.add_function(
+                name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}", 
+                parameters="int weight int capacity int capFactor int hours_per_year int cost_per_MWh",
+                # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
+                functional= neg(div(mul(mul("capacity", "capFactor"), mul("hours_per_year", "cost_per_MWh")), "weight"))
+            )
+
+        self.add_constraint(
+            name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
+            arity="2",
+            scope=f"{variable_capacity_name} {variable_capFactor_name}",
+            reference=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
+            parameters=f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}"
+        )
+
+    def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW):
+        """Adds a soft constraint to the XML instance that enforces maximum installing cost."""
+
+        if not isinstance(weight, int) or not isinstance(cost_per_MW, int):
+            raise ValueError("weight and cost_per_MW must be integers")
+
+        if not self.find_function(f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}"):
+            self.add_function(
+                name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}", 
+                parameters="int weight int capacity int oldCapacity int cost_per_MW",
+                # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
+                functional= neg(div(mul(sub("capacity", "oldCapacity"), "cost_per_MW"), "weight"))
+            )
+
+        self.add_constraint(
+            name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
+            arity="1",
+            scope=f"{variable_capacity_name}",
+            reference=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
+            parameters=f"{str(weight)} {variable_capacity_name} {previous_installed_capacity} {str(cost_per_MW)}"
+        )
     
     def frame_xml(
         self, 
