@@ -370,27 +370,30 @@ class XMLGeneratorClass:
             parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
     
-    def frame_xml(
-        self, 
-        name="defaultName", 
-        max_constraint_arity=1,
-        agent_names=None,
-        technologies=None
-    ):
+    # def frame_xml(
+    #     self, 
+    #     name="defaultName", 
+    #     max_constraint_arity=1,
+    #     agent_names=None,
+    #     technologies=None
+    # ):
         
-        self.instance = self.create_frodo2_xml_head_instance()
-        self.instance = self.add_presentation(self.instance, name, max_constraint_arity, "True", "XCSP 2.1_FRODO")
+    #     self.instance = self.create_frodo2_xml_head_instance()
+    #     self.instance = self.add_presentation(self.instance, name, max_constraint_arity, "True", "XCSP 2.1_FRODO")
 
-        self.instance = self.add_agents(self.instance, agent_names)
-        self.instance = self.add_domains(self.instance)
-        self.instance = self.add_variables(self.instance, technologies, agent_names)
+    #     self.instance = self.add_agents(self.instance, agent_names)
+    #     self.instance = self.add_domains(self.instance)
+    #     self.instance = self.add_variables(self.instance, technologies, agent_names)
 
     def print_xml(self, output_file = "defaultName_problem.xml"):
+        """Prints the XML instance to a file."""
         tree = ET.ElementTre(self.instance)
         tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
         self.logger.info(f"XML generated and saved to {output_file}")
+
     def change_max_arity_contraints(self, max_arity):
+        """Changes the max arity of constraints in the XML instance."""
         self.instance.attrib["maxConstraintArity"] = max_arity
 
 def boolean_not(a):
