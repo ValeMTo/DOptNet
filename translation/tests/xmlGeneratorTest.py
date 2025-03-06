@@ -98,9 +98,9 @@ class TestXMLGeneratorClass(unittest.TestCase):
             if "transmission" in name:
                 self.assertTrue(domain.startswith("transmission_capacity"), f"Invalid domain for {name}: {domain}")
             elif "capacity" in name:
-                self.assertEqual(domain, "capacity_installed", f"Expected 'capacity_installed' for {name}, got {domain}")
+                self.assertEqual(domain, "capacity_installed", f"Expected 'installable_capacity_domain' for {name}, got {domain}")
             elif "capFactor" in name:
-                self.assertEqual(domain, "capacity_factor", f"Expected 'capacity_factor' for {name}, got {domain}")
+                self.assertEqual(domain, "capacity_factor", f"Expected 'capacity_factors_domain' for {name}, got {domain}")
             else:
                 self.fail(f"Unknown variable name: {name}")
 
