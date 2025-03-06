@@ -1,0 +1,12 @@
+config:
+  name: "Zambezi"
+
+  logging:
+    level: "DEBUG"
+    file: "./logs/app.log"
+
+  outline:
+    countries: ['ZM', 'ZW', 'MZ']
+    year: 2050
+    #scenario: "ssp5-2.6"
+  
