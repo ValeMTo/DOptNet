@@ -10,3 +10,6 @@ frodo2.18.1.jar
 FRODO_online_manual.html
 /repository/examples
 /data
+/translation/__pycache__
+/translation/parsers/__pycache__
+/translation/tests/__pycache__
