@@ -50,19 +50,22 @@ class XMLGeneratorClass:
         if variables_element is None:
             variables_element = ET.SubElement(self.instance, "variables")
 
+        variable_list = []
         for technology in technologies:
             for agent in agent_names:
                 formatted_agent = agent.capitalize()
                 ET.SubElement(variables_element, "variable", {
                     "name": f"{technology}{formatted_agent}capacity", 
-                    "domain": "capacity_installed", 
+                    "domain": "installable_capacity_domain", 
                     "agent": agent
                 })
                 ET.SubElement(variables_element, "variable", {
                     "name": f"{technology}{formatted_agent}capFactor", 
-                    "domain": "capacity_factor", 
+                    "domain": "capacity_factors_domain", 
                     "agent": agent
                 })
+                variable_list.append(f"{technology}{formatted_agent}capacity")
+                variable_list.append(f"{technology}{formatted_agent}capFactor")
 
         # TODO: change once the agent_names are not only neighboring
         for agent in agent_names:
@@ -72,15 +75,31 @@ class XMLGeneratorClass:
                     formatted_agent2 = agent2.capitalize()
                     ET.SubElement(variables_element, "variable", {
                         "name": f"transmission{formatted_agent1}{formatted_agent2}",
-                        "domain": "transmission_capacity",
+                        "domain": "trasferable_capacity_domain",
                         "agent": agent
                     })
+                    variable_list.append(f"transmission{formatted_agent1}{formatted_agent2}")
+
+        return variable_list
     
-    def add_predicate(self, name, parameters, functional):
-        """Adds a single predicate element with parameters and functional expression."""
+    def find_predicates_functions_main_elements(self, type):
         predicates_element = self.instance.find("predicates")
         if (predicates_element is None):
             predicates_element = ET.SubElement(self.instance, "predicates")
+        functions_element = self.instance.find("functions")
+        if (functions_element is None):
+            functions_element = ET.SubElement(self.instance, "functions")
+
+        if type == "predicates":
+            return predicates_element
+        elif type == "functions":
+            return functions_element
+        else:
+            raise ValueError("Type must be either 'predicates' or 'functions'")
+    
+    def add_predicate(self, name, parameters, functional):
+        """Adds a single predicate element with parameters and functional expression."""
+        predicates_element = self.find_predicates_functions_main_elements('predicates')
         
         predicate_element = ET.SubElement(predicates_element, "predicate", {"name": name})
         ET.SubElement(predicate_element, "parameters").text = parameters
@@ -89,13 +108,11 @@ class XMLGeneratorClass:
 
     def add_function(self, name, parameters, functional):
         """Adds a single function element with parameters and functional expression."""
-        functions_element = self.instance.find("functions")
-        if (functions_element is None):
-            functions_element = ET.SubElement(self.instance, "functions")
+        functions_element = self.find_predicates_functions_main_elements('functions')
         
-        function_element = ET.SubElement(functions_element, "function", {"name": name, "return": "int"})
-        ET.SubElement(function_element, "parameters").text = parameters
-        ET.SubElement(function_element, "expression").text = functional
+        functions_element = ET.SubElement(functions_element, "function", {"name": name, "return": "int"})
+        ET.SubElement(functions_element, "parameters").text = parameters
+        ET.SubElement(functions_element, "expression").text = functional
 
     def add_constraint(self, name, arity, scope, reference, parameters):
         """Adds a single constraint element with arity, scope and reference."""
@@ -172,7 +189,7 @@ class XMLGeneratorClass:
             arity=1, 
             scope=variable_name, 
             reference="withinMaxCapacity",
-            parameters=f"{variable_name} {max_capacity}"
+            parameters=f"{variable_name} {str(max_capacity)}"
         )
     
     def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
@@ -403,7 +420,8 @@ class XMLGeneratorClass:
         """Prints the XML instance to a file."""
         self.set_max_arity_contraints()
 
-        tree = ET.ElementTre(self.instance)
+        tree = ET.ElementTree(self.instance)
+        ET.indent(tree, space="  ", level=0)
         tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
         self.logger.info(f"XML generated and saved to {output_file}")
