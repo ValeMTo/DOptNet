@@ -1,4 +1,5 @@
 import yaml
+import pandas as pd
 
 class ConfigParserClass:
     def __init__(self, file_path='config.yaml'):
@@ -6,6 +7,8 @@ class ConfigParserClass:
         try:
             with open(file_path, 'r') as file:
                 self.config = yaml.safe_load(file)
+                self.powerplants_config = self.config['powerplants']
+                self.config = self.config['config']
         except FileNotFoundError:
             raise FileNotFoundError(f"File {file_path} not found")
         
@@ -23,6 +26,27 @@ class ConfigParserClass:
         return self.config['countries']
     
     def get_year(self):
-        return str(self.config['year'])
+        return str(self.config['outline']['year'])
+    
+    def get_powerplants_data(self):
+        powerplants = []
+        for plant, details in self.powerplants_config.items():
+            for country, capacity in details["max_installable_capacity_MW"].items():
+                powerplants.append({
+                    "Technology": plant,
+                    "Installation Cost ($/MW)": details["installation_cost_per_MW"],
+                    "Operating Cost ($/MWh)": details["operating_cost_per_MWh"],
+                    "Fuel Cost ($/MWh)": details["fuel_cost_per_MWh"],
+                    "CO2 Emissions (tCO2/MWh)": details["emissions"]["CO2"],
+                    "N2O Emissions (tN2O/MWh)": details["emissions"]["N2O"],
+                    "CH4 Emissions (tCH4/MWh)": details["emissions"]["CH4"],
+                    "CFC Emissions (tCFC/MWh)": details["emissions"]["CFCs"],
+                    "Mean Capacity Factor": details["capacity_factor"]["mean"],
+                    "Country": country,
+                    "Max Installable Capacity (MW)": capacity
+                })
+
+        df = pd.DataFrame(powerplants)
+        return df
     
 
