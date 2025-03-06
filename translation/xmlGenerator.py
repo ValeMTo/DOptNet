@@ -360,9 +360,9 @@ class XMLGeneratorClass:
         if not isinstance(weight, int) or not isinstance(cost_per_MWh, int):
             raise ValueError("weight and cost_per_MW must be integers")
 
-        if not self.find_function(f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}"):
+        if not self.find_function(f"minimize_operatingCost"):
             self.add_function(
-                name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}", 
+                name=f"minimize_operatingCost", 
                 parameters="int weight int capacity int capFactor int hours_per_year int cost_per_MWh",
                 # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
                 functional= neg(div(mul(mul("capacity", "capFactor"), mul("hours_per_year", "cost_per_MWh")), mul("weight", 100)))
@@ -372,7 +372,7 @@ class XMLGeneratorClass:
             name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
             arity=2,
             scope=f"{variable_capacity_name} {variable_capFactor_name}",
-            reference=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
+            reference=f"minimize_operatingCost",
             parameters=f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}"
         )
 
@@ -385,9 +385,9 @@ class XMLGeneratorClass:
         if not isinstance(weight, int) or not isinstance(cost_per_MW, int):
             raise ValueError("weight and cost_per_MW must be integers")
 
-        if not self.find_function(f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}"):
+        if not self.find_function(f"minimize_installingCost"):
             self.add_function(
-                name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}", 
+                name=f"minimize_installingCost", 
                 parameters="int weight int capacity int oldCapacity int cost_per_MW",
                 # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
                 functional= neg(div(mul(sub("capacity", "oldCapacity"), "cost_per_MW"), "weight"))
@@ -397,7 +397,7 @@ class XMLGeneratorClass:
             name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
             arity=1,
             scope=f"{variable_capacity_name}",
-            reference=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
+            reference=f"minimize_installingCost",
             parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
     
