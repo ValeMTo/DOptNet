@@ -428,7 +428,11 @@ class XMLGeneratorClass:
 
     def set_max_arity_contraints(self):
         """Changes the max arity of constraints in the XML instance."""
-        self.instance.attrib["maxConstraintArity"] = str(self.max_arity)
+        presentation = self.instance.find("presentation")
+        if presentation is not None:    
+            presentation.attrib["maxConstraintArity"] = str(self.max_arity)
+        else:
+            raise ValueError("Presentation element not found in XML instance")
 
 def boolean_not(a):
     return f"not({a})"
