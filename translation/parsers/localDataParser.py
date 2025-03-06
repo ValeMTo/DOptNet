@@ -14,8 +14,11 @@ class localDataParserClass:
         filtered_data = filtered_data[filtered_data['DateOut'] >= 2030]
         filtered_data = filtered_data[filtered_data['Country'].isin(countries)]
         
-        grouped_data = filtered_data.groupby(['Fueltype', 'Technology', 'Country'])['Capacity'].sum().reset_index()
-        grouped_data = grouped_data.rename(columns={'Fueltype': 'fueltype', 'Technology': 'technology', 'Country': 'country', 'Capacity': 'capacity'})
+        grouped_data = filtered_data.groupby(['Fueltype', 'Country'])['Capacity'].sum().reset_index()
+        grouped_data['Fueltype'] = grouped_data['Fueltype'].str.replace(' ', '')
+        grouped_data = grouped_data.rename(columns={'Fueltype': 'fueltype', 'Country': 'country', 'Capacity': 'already_installed_capacity'})
+
+        grouped_data['fueltype'] = grouped_data['fueltype'].apply(lambda x: x + '_RunOfRiver' if x == 'Hydro' else x)
 
         return grouped_data
     
