@@ -30,7 +30,7 @@ class TestXMLGeneratorClass(unittest.TestCase):
 
     def test_add_presentation(self):
         """Test if <presentation> is correctly added inside <instance>."""
-        self.xml_generator.add_presentation("testName", '2', 'true', "XCSP 2.1_FRODO")
+        self.xml_generator.add_presentation("testName", 'true')
 
         presentation = self.xml_generator.instance.find("presentation")
         self.assertIsNotNone(presentation, "Missing <presentation> element in XML structure")

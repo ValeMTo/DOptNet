@@ -17,12 +17,12 @@ class XMLGeneratorClass:
 
         return instance
     
-    def add_presentation(self, name, maximize, format):
+    def add_presentation(self, name, maximize):
         ET.SubElement(self.instance, "presentation", {
             "name": name,
             "maxConstraintArity": str(self.max_arity),
             "maximize": maximize,
-            "format": format
+            "format": "XCSP 2.1_FRODO"
         })
     
     def add_agents(self, agent_names):
@@ -401,6 +401,8 @@ class XMLGeneratorClass:
 
     def print_xml(self, output_file = "defaultName_problem.xml"):
         """Prints the XML instance to a file."""
+        self.set_max_arity_contraints()
+
         tree = ET.ElementTre(self.instance)
         tree.write(output_file, encoding="utf-8", xml_declaration=True)
 
