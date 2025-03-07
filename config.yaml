@@ -24,9 +24,9 @@ powerplants:
     capacity_factor:
       mean: 45  # Fraction (Typical utilization rate)
     max_installable_capacity_MW:
-      MZ: 1500  # MW
-      ZM: 1200  # MW
-      ZW: 800   # MW
+      MZ: 4000  # MW
+      ZM: 3000  # MW
+      ZW: 2500   # MW
 
   Solar_PV:
     installation_cost_per_MW: 1000  # $/MW
@@ -40,9 +40,9 @@ powerplants:
     capacity_factor:
       mean: 22
     max_installable_capacity_MW:
-      MZ: 5000
-      ZM: 4000
-      ZW: 3500
+      MZ: 10000
+      ZM: 10000
+      ZW: 10000
 
   Wind:
     installation_cost_per_MW: 1500  # $/MW
