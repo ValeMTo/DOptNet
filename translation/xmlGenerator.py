@@ -112,7 +112,8 @@ class XMLGeneratorClass:
         
         functions_element = ET.SubElement(functions_element, "function", {"name": name, "return": "int"})
         ET.SubElement(functions_element, "parameters").text = parameters
-        ET.SubElement(functions_element, "expression").text = functional
+        expression_element = ET.SubElement(functions_element, "expression")
+        ET.SubElement(expression_element, "functional").text = functional
 
     def add_constraint(self, name, arity, scope, reference, parameters):
         """Adds a single constraint element with arity, scope and reference."""
@@ -314,7 +315,7 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
 
-    def add_demand_constraint_per_agent(self, agent_name, max_demand, technologies):
+    def add_demand_constraint_per_agent(self, agent_name, min_demand, technologies):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
         def build_recursive_expression(technologies):
             """Recursively builds the expression: 
@@ -323,24 +324,24 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 tech = technologies[0]
-                return mul(f"{tech}Capacity", f"{tech}CapFactor)")
+                return mul(f"{tech}capacity", f"{tech}capFactor")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(div(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), 100), build_recursive_expression(technologies[1:]))
+            return add(mul(f"{technologies[0]}capacity", f"{technologies[0]}capFactor"), build_recursive_expression(technologies[1:]))
             
-        if not isinstance(max_demand, int):
-            raise ValueError("max_demand must be an integer")
+        if not isinstance(min_demand, int):
+            raise ValueError("min_demand must be an integer")
         
         variables = [f"{technology}{agent_name}capacity" for technology in technologies]
         variables += [f"{technology}{agent_name}capFactor" for technology in technologies]
 
         variables.sort()
         
-        if not self.find_predicate("withinMaxDemand"):
+        if not self.find_predicate("minDemandPerAgent"):
             self.add_predicate(
                 name="minDemandPerAgent", 
-                parameters=" ".join([f"int {variable}" for variable in variables]) + " int max_demand",
-                functional=boolean_ge(build_recursive_expression(technologies), "max_demand")
+                parameters=" ".join([f"int {variable.replace(agent_name, '')}" for variable in variables]) + " int min_demand",
+                functional=boolean_ge(div(build_recursive_expression(technologies), "100"), "min_demand")
             )
         
         self.add_constraint(
@@ -348,7 +349,7 @@ class XMLGeneratorClass:
             arity=len(variables), 
             scope=" ".join(variables), 
             reference="minDemandPerAgent",
-            parameters=f"{' '.join(variables)} {max_demand}"
+            parameters=f"{' '.join(variables)} {str(min_demand)}"
         )
 
         if len(variables) > self.max_arity:
@@ -360,21 +361,44 @@ class XMLGeneratorClass:
         if not isinstance(weight, int) or not isinstance(cost_per_MWh, int):
             raise ValueError("weight and cost_per_MW must be integers")
 
-        if not self.find_function(f"minimize_operatingCost"):
-            self.add_function(
-                name=f"minimize_operatingCost", 
-                parameters="int weight int capacity int capFactor int hours_per_year int cost_per_MWh",
-                # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                functional= neg(div(mul(mul("capacity", "capFactor"), mul("hours_per_year", "cost_per_MWh")), mul("weight", 100)))
-            )
+        complex_weight = 8760 * cost_per_MWh / (weight * 100)
+        self.logger.info(f"Complex weight: {complex_weight}")
+        if complex_weight >= 1:
+            if not self.find_function(f"minimize_operatingCost_mul"):
+                self.add_function(
+                    name=f"minimize_operatingCost_mul", 
+                    parameters="int capacity int capFactor int weight",
+                    # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
+                    functional= neg(mul(mul("capacity", "capFactor"), "weight"))
+                )
 
-        self.add_constraint(
-            name=f"minimize_operatingCost_{variable_capacity_name.replace('capacity', '')}",
-            arity=2,
-            scope=f"{variable_capacity_name} {variable_capFactor_name}",
-            reference=f"minimize_operatingCost",
-            parameters=f"{weight} {variable_capacity_name} {variable_capFactor_name} 8760 {cost_per_MWh}"
-        )
+            self.add_constraint(
+                name=f"minimize_operatingCost_mul_{variable_capacity_name.replace('capacity', '')}",
+                arity=2,
+                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                reference=f"minimize_operatingCost_mul",
+                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(round(complex_weight))}"
+            )
+        elif complex_weight < 1 and complex_weight >= 0:
+            div_complex_weight = round(1 / complex_weight) if complex_weight != 0 else 10**6
+            if complex_weight == 0:
+                self.logger.warning("The complex weight is 0, the constraint will be added with a very high weight")
+            if not self.find_function(f"minimize_operatingCost_div"):
+                self.add_function(
+                    name=f"minimize_operatingCost_div", 
+                    parameters="int capacity int capFactor int weight",
+                    # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
+                    functional= neg(div(mul("capacity", "capFactor"), "weight"))
+                )
+            self.add_constraint(
+                name=f"minimize_operatingCost_div_{variable_capacity_name.replace('capacity', '')}",
+                arity=2,
+                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                reference=f"minimize_operatingCost_div",
+                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(div_complex_weight)}"
+            )
+        else:
+            raise ValueError("the complex weight should be positive")
 
         if self.max_arity < 2:
             self.max_arity = 2
