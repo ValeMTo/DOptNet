@@ -324,6 +324,51 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
 
+    def add_emission_cap_constraint_per_agent(self, agent_name, technolgies_emission_costs, max_emission):
+        """Adds an hard constraint to the XML instance that enforces maximum emission per agent."""
+        def build_recursive_expression(agent_name, technolgies_emission_costs):
+            technologies = list(technolgies_emission_costs.keys())
+            # Base case: If only one technology remains, return its multiplication
+            if len(technologies) == 1:
+                random_key = technologies[0]
+                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
+
+            random_key = technologies[0]
+            # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
+            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
+        
+        if not isinstance(max_emission, int):
+            raise ValueError("max_emission must be an integer")
+        
+        keys_to_remove = [tech for tech in technolgies_emission_costs.keys() if technolgies_emission_costs[tech] == 0]
+        for tech in keys_to_remove:
+            del technolgies_emission_costs[tech]
+
+        technologies = technolgies_emission_costs.keys()
+        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
+        variables.sort()
+
+        functional_formula = build_recursive_expression(agent_name.capitalize(), technolgies_emission_costs)
+        if not self.find_predicate(f"withinMaxEmission_{agent_name}"):
+            self.add_predicate(
+                name=f"withinMaxEmission_{agent_name}", 
+                parameters=" ".join([f"int {variable}" for variable in variables]) + " int max_emission",
+                functional=boolean_le(functional_formula, "max_emission")
+            )
+
+        self.add_constraint(
+            name=f"withinMaxEmission_{agent_name}_{len(technologies)}", 
+            arity=len(variables), 
+            scope=" ".join(variables), 
+            reference=f"withinMaxEmission_{agent_name}",
+            parameters=f"{' '.join(variables)} {max_emission}"
+        )
+
+        if len(variables) > self.max_arity:
+            self.max_arity = len(variables)
+
+    def add_demand_constraint_per_agent(self, agent_name, min_demand, technologies, neighbor_agents):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
         def build_recursive_expression(technologies):
             """Recursively builds the expression: 
