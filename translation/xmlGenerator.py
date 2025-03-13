@@ -370,38 +370,50 @@ class XMLGeneratorClass:
 
     def add_demand_constraint_per_agent(self, agent_name, min_demand, technologies, neighbor_agents):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
-        def build_recursive_expression(technologies):
+        def build_recursive_expression(technologies, agent_name):
             """Recursively builds the expression: 
             add(add(mul(tech1Capacity, tech1CapFactor), mul(tech2Capacity, tech2CapFactor)), mul(tech3Capacity, tech3CapFactor))"""
-            
+            agent_name = agent_name.capitalize()
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
-                tech = technologies[0]
-                return mul(f"{tech}capacity", f"{tech}capFactor")
+                return mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(f"{technologies[0]}capacity", f"{technologies[0]}capFactor"), build_recursive_expression(technologies[1:]))
+            return add(mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor"), build_recursive_expression(technologies[1:], agent_name))
             
         if not isinstance(min_demand, int):
             raise ValueError("min_demand must be an integer")
         
-        variables = [f"{technology}{agent_name}capacity" for technology in technologies]
-        variables += [f"{technology}{agent_name}capFactor" for technology in technologies]
-
+        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
+        outflow_transmission_variables = [f"transmission{agent_name.capitalize()}{agent2.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
+        inflow_transmission_variables = [f"transmission{agent2.capitalize()}{agent_name.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
+        
         variables.sort()
+        outflow_transmission_variables.sort()
+        inflow_transmission_variables.sort()
+
+        functional_formula = div(build_recursive_expression(technologies, agent_name), "100")
+        for transmission_variable in inflow_transmission_variables:
+            functional_formula = add(functional_formula, transmission_variable)
+        for transmission_variable in outflow_transmission_variables:
+            functional_formula = sub(functional_formula, transmission_variable)
+
+        variables += outflow_transmission_variables
+        variables += inflow_transmission_variables
         
         if not self.find_predicate("minDemandPerAgent"):
             self.add_predicate(
-                name="minDemandPerAgent", 
-                parameters=" ".join([f"int {variable.replace(agent_name, '')}" for variable in variables]) + " int min_demand",
-                functional=boolean_ge(div(build_recursive_expression(technologies), "100"), "min_demand")
+                name="minDemandPerAgent_" + agent_name, 
+                parameters=" ".join([f"int {variable}" for variable in variables]) + " int min_demand",
+                functional=boolean_ge(functional_formula, "min_demand")
             )
         
         self.add_constraint(
-            name=f"minDemandPerAgent_{agent_name}", 
+            name=f"minDemandPerAgent_{agent_name}_{len(variables)}", 
             arity=len(variables), 
             scope=" ".join(variables), 
-            reference="minDemandPerAgent",
+            reference="minDemandPerAgent_" + agent_name,
             parameters=f"{' '.join(variables)} {str(min_demand)}"
         )
 
