@@ -324,7 +324,6 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
 
-    def add_demand_constraint_per_agent(self, agent_name, min_demand, technologies):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
         def build_recursive_expression(technologies):
             """Recursively builds the expression: 
