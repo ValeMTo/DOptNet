@@ -279,36 +279,45 @@ class XMLGeneratorClass:
     
     def add_emission_cap_constraint(self, agents, technolgies_emission_costs, max_emission):
         """Adds an hard constraint to the XML instance that enforces maximum emission."""
-        def build_recursive_expression(technolgies_emission_costs):
-            technologies = technolgies_emission_costs.keys()
+        def build_recursive_expression(agent_name, technolgies_emission_costs):
+            technologies = list(technolgies_emission_costs.keys())
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
-                tech = technologies[0]
-                return mul(f"{tech}Capacity", f"{tech}CapFactor)")
+                random_key = technologies[0]
+                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
 
+            random_key = technologies[0]
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(div(mul(mul(f"{technologies[0]}Capacity", f"{technologies[0]}CapFactor"), mul(8760, technolgies_emission_costs[technologies[0]])), 100), build_recursive_expression(technologies[1:]))
+            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
+        
+        keys_to_remove = [tech for tech in technolgies_emission_costs.keys() if technolgies_emission_costs[tech] == 0]
+        for tech in keys_to_remove:
+            del technolgies_emission_costs[tech]
 
         technologies = technolgies_emission_costs.keys()
-        variables = [f"{technology}{agent_name}capacity" for technology in technologies for agent_name in agents]
-        variables += [f"{technology}{agent_name}capFactor" for technology in technologies for agent_name in agents]
+        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies for agent_name in agents]
+        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies for agent_name in agents]
         variables.sort()
 
-        if not self.find_predicate(f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}"):
+        functional_formula = build_recursive_expression(agents[0].capitalize(), technolgies_emission_costs)
+        for agent in agents[1:]:
+            functional_formula = add(functional_formula, build_recursive_expression(agent.capitalize(), technolgies_emission_costs))
+
+        if not self.find_predicate(f"withinMaxEmission_all"):
             self.add_predicate(
-                name=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}", 
+                name=f"withinMaxEmission_all", 
                 parameters=" ".join([f"int {variable}" for variable in variables]) + " int max_emission",
-                functional=boolean_le(build_recursive_expression(technolgies_emission_costs), "max_emission")
+                functional=boolean_le(functional_formula, "max_emission")
             )
 
         self.add_constraint(
-            name=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}", 
-            arity=str(len(variables)), 
+            name=f"withinMaxEmission_all_{len(agents)*len(technolgies_emission_costs)}", 
+            arity=len(variables), 
             scope=" ".join(variables), 
-            reference=f"withinMaxEmission_{len(agents)*len(technolgies_emission_costs)}",
+            reference=f"withinMaxEmission_all",
             parameters=f"{' '.join(variables)} {max_emission}"
         )
 
