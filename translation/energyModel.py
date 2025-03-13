@@ -65,6 +65,7 @@ class EnergyModelClass:
                 variable_name=f"{row['fueltype']}{row['country'].capitalize()}capacity", 
                 min_capacity=round(row['already_installed_capacity'])
             )
+            continue
 
         powerplants_data = powerplants_data.merge(
             installed_powerplants[['fueltype', 'country', 'already_installed_capacity']],
@@ -78,31 +79,43 @@ class EnergyModelClass:
                 max_capacity=round(row['Max Installable Capacity (MW)'])
             )
             self.xml_generator.add_maximum_capacity_factor_constraint(
-                variable_name=f"{row['Technology']}{row['Country'].capitalize()}capacityfactor",
+                variable_name=f"{row['Technology']}{row['Country'].capitalize()}capFactor",
                 max_capacity_factor=row['Mean Capacity Factor']
             )
             self.xml_generator.add_operating_cost_minimization_constraint(
-                weight=1,
+                weight=10**3,
                 variable_capacity_name=f"{row['Technology']}{row['Country'].capitalize()}capacity",
-                variable_capFactor_name=f"{row['Technology']}{row['Country'].capitalize()}capacityfactor",
+                variable_capFactor_name=f"{row['Technology']}{row['Country'].capitalize()}capFactor",
                 cost_per_MWh=round(row['Operating Cost ($/MWh)'] + row['Fuel Cost ($/MWh)'])
             )
             self.xml_generator.add_installing_cost_minimization_constraint(
-                weight=1,
+                weight=10**3,
                 variable_capacity_name=f"{row['Technology']}{row['Country'].capitalize()}capacity",
                 previous_installed_capacity=int(row["already_installed_capacity"]),
                 cost_per_MW=round(row['Installation Cost ($/MW)'])
             )
+            continue
 
         demand_data = self.data_parser.get_annual_demand_data(self.year, self.countries)
         for country in self.countries:
             self.xml_generator.add_demand_constraint_per_agent(
                 agent_name=country,
-                max_demand=round(demand_data.loc[demand_data['country'] == country][f'annual_demand_{int(self.year)}_GW'].values[0] * 1000), #GW to MW
-                technologies=powerplants_data.loc[powerplants_data['Country'] == country]['Technology'].values
+                min_demand=round(demand_data.loc[demand_data['country'] == country][f'annual_demand_{int(self.year)}_GW'].values[0] * 1000), #GW to MW
+                technologies=powerplants_data['Technology'].unique(),
+                neighbor_agents=self.countries #TODO: remove self and create a function to find only the neighbors
             )
+            self.xml_generator.add_emission_cap_constraint_per_agent(
+            agent_name=country, 
+            technolgies_emission_costs=powerplants_data[['Technology', 'CO2 Emissions (tCO2/MWh yearly)']].drop_duplicates().set_index('Technology').to_dict()['CO2 Emissions (tCO2/MWh yearly)'], 
+            max_emission=10**8
+        )
+            continue
 
-        #TODO: add max emissions constraints
+        # self.xml_generator.add_emission_cap_constraint(
+        #     agents=self.countries, 
+        #     technolgies_emission_costs=powerplants_data[['Technology', 'CO2 Emissions (tCO2/MWh yearly)']].drop_duplicates().set_index('Technology').to_dict()['CO2 Emissions (tCO2/MWh yearly)'], 
+        #     max_emission=10**8
+        # )
 
         self.xml_generator.print_xml(output_file=f'{self.name}_output.xml')
         self.logger.info("XML generated")
@@ -111,8 +124,8 @@ class EnergyModelClass:
         #TODO: Do not hard code this values
         self.logger.debug("Generating domains...")
         domains = {}
-        domains["capacity_factors_domain"] = range(0, 101, 1)
-        domains["installable_capacity_domain"] = range(0, 10000, 100) #MW
-        domains["trasferable_capacity_domain"] = range(0, 3000, 50) #MW
+        domains["capacity_factors_domain"] = range(0, 101, 10)
+        domains["installable_capacity_domain"] = range(0, 10000, 1000) #MW
+        domains["trasferable_capacity_domain"] = range(0, 3000, 500) #MW
         return domains
     
