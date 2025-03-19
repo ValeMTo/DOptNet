@@ -12,6 +12,9 @@ class ConfigParserClass:
         except FileNotFoundError:
             raise FileNotFoundError(f"File {file_path} not found")
         
+    def get_file_path(self):
+        return self.config['file_path']
+        
     def get_problem_name(self):
         return self.config['name']
     
@@ -28,6 +31,7 @@ class ConfigParserClass:
     def get_year(self):
         return str(self.config['outline']['year'])
     
+
     def get_powerplants_data(self):
         powerplants = []
         for plant, details in self.powerplants_config.items():

@@ -1,5 +1,5 @@
 from translation.parsers.configParser import ConfigParserClass
-from translation.parsers.localDataParser import localDataParserClass
+from translation.parsers.osemosysDataParser import localDataParserClass
 from translation.xmlGenerator import XMLGeneratorClass
 from deprecated import deprecated
 import logging
@@ -12,7 +12,7 @@ class EnergyModelClass:
         self.logger = self.create_logger(self.log_level, log_file)
         self.config_parser.set_logger(self.logger)
 
-        self.data_parser = localDataParserClass(logger = self.logger)
+        self.data_parser = localDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
 
         self.name = self.config_parser.get_problem_name()
