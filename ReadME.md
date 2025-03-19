@@ -19,4 +19,4 @@ To run the `frodo2.18.1.jar` file, follow these steps:
     java -jar frodo2.18.1.jar
     ```
 
-This will start the Frodo2 application.
+This will start the Frodo2 application.gf

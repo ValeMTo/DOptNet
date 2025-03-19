@@ -14,3 +14,9 @@ FRODO_online_manual.html
 /translation/parsers/__pycache__
 /translation/tests/__pycache__
 /logs
+gurobi.log
+solution.xml
+solution.xml
+translation/test.ipynb
+solution.xml
+.DS_Store
