@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from deprecated import deprecated
 
 class XMLGeneratorClass:
     def __init__(self, logger):
@@ -44,6 +45,40 @@ class XMLGeneratorClass:
         for name, values in domain_values.items():
             ET.SubElement(domains_element, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
 
+    def add_variable_from_name(self, technologies, agents):
+
+        variables_element = self.instance.find("variables")
+        if variables_element is None:
+            variables_element = ET.SubElement(self.instance, "variables")
+
+        variable_list = []
+        for variable in technologies:
+            ET.SubElement(variables_element, "variable", {
+                    "name": f"{variable}_capacity", 
+                    "domain": "installable_capacity_domain", 
+                    "agent": variable[:2]
+                })
+            ET.SubElement(variables_element, "variable", {
+                "name": f"{variable}_rateActivity", 
+                "domain": "rate_activity_domain", 
+                "agent": variable[:2]
+            })
+            variable_list.append(f"{variable}_capacity")
+            variable_list.append(f"{variable}_rateActivity")
+
+        for agent in agents:
+            for agent2 in agents:
+                if agent != agent2:
+                    ET.SubElement(variables_element, "variable", {
+                        "name": f"transmission_{agent}_{agent2}",
+                        "domain": "trasferable_capacity_domain",
+                        "agent": agent
+                    })
+                    variable_list.append(f"transmission_{agent}_{agent2}")
+
+        return variable_list
+
+    @deprecated
     def add_variables(self, technologies, agent_names):
         """Adds multiple variables inside a single <variables> element."""
         variables_element = self.instance.find("variables")
@@ -191,47 +226,76 @@ class XMLGeneratorClass:
             parameters=f"{variable_name} {str(max_capacity)}"
         )
     
-    def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
-        """Adds an hard constraint to the XML instance that enforces minimum capacity factor."""
+    def add_minimum_rate_of_activity_constraint(self, agent_technology, factor):
+        """Adds an hard constraint to the XML instance that enforces minimum rate fo activity."""
+        capacity_variable = f"{agent_technology}_capacity"
+        rate_activity_variable = f"{agent_technology}_rateActivity"
 
-        if not isinstance(min_capacity_factor, int):
-            raise ValueError("min_capacity_factor must be an integer")
-        
-        if not self.find_predicate("minimumCapacityFactor"):
-            self.add_predicate(
-                name="minimumCapacityFactor", 
-                parameters="int capacity_factor int min_capacity_factor", 
-                functional=boolean_ge("capacity_factor", "min_capacity_factor")
-            )
+        if factor >= 1 or factor == 0:
+            factor = round(factor)
+            if not self.find_predicate("minimumRateOfActivity"):
+                self.add_predicate(
+                    name="minimumRateOfActivity", 
+                    parameters="int rate_of_activity int capacity int factor", 
+                    functional=boolean_ge("rate_of_activity", mul("capacity", "factor"))
+                )
+        elif factor < 1 and factor > 0:
+            factor = round(1 / factor)
+            if not self.find_predicate("minimumRateOfActivity"):
+                self.add_predicate(
+                    name="minimumRateOfActivity", 
+                    parameters="int rate_of_activity int capacity int factor", 
+                    functional=boolean_ge("rate_of_activity", div("capacity", "factor"))
+                )
+        else:
+            raise ValueError("The factor should be positive")
         
         self.add_constraint(
-            name=f"minimumCapacityFactor_{variable_name}", 
+            name=f"minimumRateOfActivity_{agent_technology}", 
             arity=1, 
-            scope=variable_name, 
-            reference="minimumCapacityFactor",
-            parameters=f"{variable_name} {min_capacity_factor}"
+            scope=f"{rate_activity_variable} {capacity_variable}", 
+            reference="minimumRateOfActivity",
+            parameters=f"{rate_activity_variable} {capacity_variable} {factor}"
         )
-        
-    def add_maximum_capacity_factor_constraint(self, variable_name, max_capacity_factor):
-        """Adds an hard constraint to the XML instance that enforces maximum capacity factor."""
 
-        if not isinstance(max_capacity_factor, int):
-            raise ValueError("max_capacity_factor must be an integer")
-        
-        if not self.find_predicate("maximumCapacityFactor"):
-            self.add_predicate(
-                name="maximumCapacityFactor", 
-                parameters="int capacity_factor int max_capacity_factor", 
-                functional=boolean_le("capacity_factor", "max_capacity_factor")
+    def add_maximum_rate_of_activity_constraint(self, agent_technology, factor):
+        """Adds an hard constraint to the XML instance that enforces maximum rate fo activity."""
+        capacity_variable = f"{agent_technology}_capacity"
+        rate_activity_variable = f"{agent_technology}_rateActivity"
+
+        if factor >= 1 or factor == 0:
+            factor = round(factor)
+            if not self.find_predicate("maximumRateOfActivity_mul"):
+                self.add_predicate(
+                    name="maximumRateOfActivity_mul", 
+                    parameters="int rate_of_activity int capacity int factor", 
+                    functional=boolean_le("rate_of_activity", mul("capacity", "factor"))
+                )
+            self.add_constraint(
+                name=f"maximumRateOfActivity_{agent_technology}", 
+                arity=2, 
+                scope=f"{rate_activity_variable} {capacity_variable}", 
+                reference="maximumRateOfActivity_mul",
+                parameters=f"{rate_activity_variable} {capacity_variable} {factor}"
             )
+        elif factor < 1 and factor > 0:
+            factor = round(1 / factor) 
+            if not self.find_predicate("maximumRateOfActivity_div"):
+                self.add_predicate(
+                    name="maximumRateOfActivity_div", 
+                    parameters="int rate_of_activity int capacity int factor", 
+                    functional=boolean_le("rate_of_activity", div("capacity", "factor"))
+                )
+            self.add_constraint(
+                name=f"maximumRateOfActivity_{agent_technology}", 
+                arity=2, 
+                scope=f"{rate_activity_variable} {capacity_variable}", 
+                reference="maximumRateOfActivity_div",
+                parameters=f"{rate_activity_variable} {capacity_variable} {factor}"
+            )
+        else:
+            raise ValueError("The factor should be positive")
         
-        self.add_constraint(
-            name=f"maximumCapacityFactor_{variable_name}", 
-            arity=1, 
-            scope=variable_name, 
-            reference="maximumCapacityFactor",
-            parameters=f"{variable_name} {max_capacity_factor}"
-        )
     
     def add_min_transmission_capacity_constraint(self, transmission_variable_name, min_transmission_capacity):
         """Adds an hard constraint to the XML instance that enforces minimum transmission capacity."""

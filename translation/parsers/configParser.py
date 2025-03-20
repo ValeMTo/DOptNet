@@ -1,5 +1,6 @@
 import yaml
 import pandas as pd
+from deprecated import deprecated
 
 class ConfigParserClass:
     def __init__(self, file_path='config.yaml'):
@@ -7,13 +8,13 @@ class ConfigParserClass:
         try:
             with open(file_path, 'r') as file:
                 self.config = yaml.safe_load(file)
-                self.powerplants_config = self.config['powerplants']
                 self.config = self.config['config']
         except FileNotFoundError:
             raise FileNotFoundError(f"File {file_path} not found")
         
     def get_file_path(self):
-        return self.config['file_path']
+        return self.config['outline']['data_file_path']
+    
         
     def get_problem_name(self):
         return self.config['name']
@@ -29,9 +30,9 @@ class ConfigParserClass:
         return self.config['outline']['countries']
     
     def get_year(self):
-        return str(self.config['outline']['year'])
+        return self.config['outline']['year']
     
-
+    @deprecated(reason="Data extracted by dataParser class")
     def get_powerplants_data(self):
         powerplants = []
         for plant, details in self.powerplants_config.items():

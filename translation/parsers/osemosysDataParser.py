@@ -5,13 +5,26 @@ class localDataParserClass:
         self.logger = logger
         self.logger.info("Local Data parser initialized")
         self.data_file_path = file_path
+        #self.tech_file_path = tech_path
+        #self.fuel_file_path = fuel_path
 
-    def extract_minimium_installed_capacity(self, year):
+    def convert_fromGW_capacity_unit(self, data, unit):
+        if unit == 'GW':
+            data = data
+        elif unit == 'MW':
+            data = data * 1000
+        else:
+            raise ValueError("Unit must be 'GW' or 'MW'")
+        return data
+
+    def extract_minimum_installed_capacity(self, year, unit='GW'):
         residualCapacity_df = pd.read_excel(self.data_file_path, sheet_name="ResidualCapacity")
         residualCapacity_df['COUNTRY'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[:2])
         residualCapacity_df['TECH'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[2:])
         new_df = residualCapacity_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'MIN_INSTALLED_CAPACITY'})
         new_df['MIN_INSTALLED_CAPACITY'] = pd.to_numeric(new_df['MIN_INSTALLED_CAPACITY'], errors='coerce')
+        
+        new_df['MIN_INSTALLED_CAPACITY'] = self.convert_fromGW_capacity_unit(new_df['MIN_INSTALLED_CAPACITY'], unit)
 
         return new_df
     
@@ -203,8 +216,10 @@ class localDataParserClass:
 
         return new_df
     
-    def extract_technologies(self):
+    def extract_technologies_per_country(self):
+
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
         technologies_df['TECHNOLOGY'] = technologies_df[0]
+        technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
 
-        return technologies_df['TECHNOLOGY'].values
+        return technologies_df[['COUNTRY', 'TECHNOLOGY']]
