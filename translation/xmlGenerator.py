@@ -53,36 +53,34 @@ class XMLGeneratorClass:
         variable_list = []
         for technology in technologies:
             for agent in agent_names:
-                formatted_agent = agent.capitalize()
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}capacity", 
+                    "name": f"{agent}{technology}_capacity", 
                     "domain": "installable_capacity_domain", 
                     "agent": agent
                 })
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}capFactor", 
-                    "domain": "capacity_factors_domain", 
+                    "name": f"{agent}{technology}_rateActivity", 
+                    "domain": "rate_activity_domain", 
                     "agent": agent
                 })
-                variable_list.append(f"{technology}{formatted_agent}capacity")
-                variable_list.append(f"{technology}{formatted_agent}capFactor")
+                variable_list.append(f"{agent}{technology}_capacity")
+                variable_list.append(f"{agent}{technology}_rateActivity")
 
         # TODO: change once the agent_names are not only neighboring
         for agent in agent_names:
             for agent2 in agent_names:
                 if agent != agent2:
-                    formatted_agent1 = agent.capitalize()
-                    formatted_agent2 = agent2.capitalize()
                     ET.SubElement(variables_element, "variable", {
-                        "name": f"transmission{formatted_agent1}{formatted_agent2}",
+                        "name": f"transmission_{agent}_{agent2}",
                         "domain": "trasferable_capacity_domain",
                         "agent": agent
                     })
-                    variable_list.append(f"transmission{formatted_agent1}{formatted_agent2}")
+                    variable_list.append(f"transmission_{agent}_{agent2}")
 
         return variable_list
     
     def find_predicates_functions_main_elements(self, type):
+        """Finds the main element for predicates or functions."""
         predicates_element = self.instance.find("predicates")
         if (predicates_element is None):
             predicates_element = ET.SubElement(self.instance, "predicates")
@@ -284,11 +282,11 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 random_key = technologies[0]
-                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
+                return mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity)")
 
             random_key = technologies[0]
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
+            return add(mul(mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
@@ -298,13 +296,13 @@ class XMLGeneratorClass:
             del technolgies_emission_costs[tech]
 
         technologies = technolgies_emission_costs.keys()
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies for agent_name in agents]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies for agent_name in agents]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies for agent_name in agents]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies for agent_name in agents]
         variables.sort()
 
-        functional_formula = build_recursive_expression(agents[0].capitalize(), technolgies_emission_costs)
+        functional_formula = build_recursive_expression(agents[0], technolgies_emission_costs)
         for agent in agents[1:]:
-            functional_formula = add(functional_formula, build_recursive_expression(agent.capitalize(), technolgies_emission_costs))
+            functional_formula = add(functional_formula, build_recursive_expression(agent, technolgies_emission_costs))
 
         if not self.find_predicate(f"withinMaxEmission_all"):
             self.add_predicate(
@@ -331,11 +329,11 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 random_key = technologies[0]
-                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
+                return mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity)")
 
             random_key = technologies[0]
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
+            return add(mul(mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
@@ -345,11 +343,11 @@ class XMLGeneratorClass:
             del technolgies_emission_costs[tech]
 
         technologies = technolgies_emission_costs.keys()
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies]
         variables.sort()
 
-        functional_formula = build_recursive_expression(agent_name.capitalize(), technolgies_emission_costs)
+        functional_formula = build_recursive_expression(agent_name, technolgies_emission_costs)
         if not self.find_predicate(f"withinMaxEmission_{agent_name}"):
             self.add_predicate(
                 name=f"withinMaxEmission_{agent_name}", 
@@ -373,21 +371,21 @@ class XMLGeneratorClass:
         def build_recursive_expression(technologies, agent_name):
             """Recursively builds the expression: 
             add(add(mul(tech1Capacity, tech1CapFactor), mul(tech2Capacity, tech2CapFactor)), mul(tech3Capacity, tech3CapFactor))"""
-            agent_name = agent_name.capitalize()
+            agent_name = agent_name
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
-                return mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor")
+                return mul(f"{technologies[0]}{agent_name}_capacity", f"{technologies[0]}{agent_name}_rateActivity")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor"), build_recursive_expression(technologies[1:], agent_name))
+            return add(mul(f"{technologies[0]}{agent_name}_capacity", f"{technologies[0]}{agent_name}_rateActivity"), build_recursive_expression(technologies[1:], agent_name))
             
         if not isinstance(min_demand, int):
             raise ValueError("min_demand must be an integer")
         
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
-        outflow_transmission_variables = [f"transmission{agent_name.capitalize()}{agent2.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
-        inflow_transmission_variables = [f"transmission{agent2.capitalize()}{agent_name.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies]
+        outflow_transmission_variables = [f"transmission{agent_name}{agent2}" for agent2 in neighbor_agents if agent2 != agent_name]
+        inflow_transmission_variables = [f"transmission{agent2}{agent_name}" for agent2 in neighbor_agents if agent2 != agent_name]
         
         variables.sort()
         outflow_transmission_variables.sort()
@@ -420,7 +418,7 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
     
-    def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh):
+    def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable__rateActivity_name, cost_per_MWh):
         """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
 
         if not isinstance(weight, int) or not isinstance(cost_per_MWh, int):
@@ -432,17 +430,17 @@ class XMLGeneratorClass:
             if not self.find_function(f"minimize_operatingCost_mul"):
                 self.add_function(
                     name=f"minimize_operatingCost_mul", 
-                    parameters="int capacity int capFactor int weight",
+                    parameters="int capacity int _rateActivity int weight",
                     # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                    functional= neg(mul(mul("capacity", "capFactor"), "weight"))
+                    functional= neg(mul(mul("capacity", "_rateActivity"), "weight"))
                 )
 
             self.add_constraint(
                 name=f"minimize_operatingCost_mul_{variable_capacity_name.replace('capacity', '')}",
                 arity=2,
-                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                scope=f"{variable_capacity_name} {variable__rateActivity_name}",
                 reference=f"minimize_operatingCost_mul",
-                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(round(complex_weight))}"
+                parameters=f"{variable_capacity_name} {variable__rateActivity_name} {str(round(complex_weight))}"
             )
         elif complex_weight < 1 and complex_weight >= 0:
             div_complex_weight = round(1 / complex_weight) if complex_weight != 0 else 10**6
@@ -451,16 +449,16 @@ class XMLGeneratorClass:
             if not self.find_function(f"minimize_operatingCost_div"):
                 self.add_function(
                     name=f"minimize_operatingCost_div", 
-                    parameters="int capacity int capFactor int weight",
+                    parameters="int capacity int _rateActivity int weight",
                     # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                    functional= neg(div(mul("capacity", "capFactor"), "weight"))
+                    functional= neg(div(mul("capacity", "_rateActivity"), "weight"))
                 )
             self.add_constraint(
                 name=f"minimize_operatingCost_div_{variable_capacity_name.replace('capacity', '')}",
                 arity=2,
-                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                scope=f"{variable_capacity_name} {variable__rateActivity_name}",
                 reference=f"minimize_operatingCost_div",
-                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(div_complex_weight)}"
+                parameters=f"{variable_capacity_name} {variable__rateActivity_name} {str(div_complex_weight)}"
             )
         else:
             raise ValueError("the complex weight should be positive")
@@ -490,21 +488,6 @@ class XMLGeneratorClass:
             parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
     
-    # def frame_xml(
-    #     self, 
-    #     name="defaultName", 
-    #     max_constraint_arity=1,
-    #     agent_names=None,
-    #     technologies=None
-    # ):
-        
-    #     self.instance = self.create_frodo2_xml_head_instance()
-    #     self.instance = self.add_presentation(self.instance, name, max_constraint_arity, "True", "XCSP 2.1_FRODO")
-
-    #     self.instance = self.add_agents(self.instance, agent_names)
-    #     self.instance = self.add_domains(self.instance)
-    #     self.instance = self.add_variables(self.instance, technologies, agent_names)
-
     def print_xml(self, output_file = "defaultName_problem.xml"):
         """Prints the XML instance to a file."""
         self.set_max_arity_contraints()

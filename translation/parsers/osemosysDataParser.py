@@ -202,3 +202,9 @@ class localDataParserClass:
         new_df['ANNUAL_EMISSION_LIMIT'] = pd.to_numeric(new_df['ANNUAL_EMISSION_LIMIT'], errors='coerce')
 
         return new_df
+    
+    def extract_technologies(self):
+        technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
+        technologies_df['TECHNOLOGY'] = technologies_df[0]
+
+        return technologies_df['TECHNOLOGY'].values
