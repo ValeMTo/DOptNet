@@ -16,7 +16,7 @@
     <variables>
         <variable name="solarCapacityA" domain="new_capacity" agent="a" />
         <variable name="solarCapacityB" domain="new_capacity" agent="b" />
-        <variable name="solarCapacityC" domain="new_capacity" agent="cc1" />
+        <variable name="solarCapacityC" domain="new_capacity" agent="c" />
         <variable name="gasCapacityA" domain="new_capacity" agent="a" />
         <variable name="gasCapacityB" domain="new_capacity" agent="b" />
         <variable name="gasCapacityC" domain="new_capacity" agent="c" />
@@ -63,7 +63,7 @@
         <predicate name="emissions_cap">
             <parameters>int gasCapacityA int gasFactorA int gasCapacityB int gasFactorB int gasCapacityC int gasFactorC int limit</parameters>
             <expression>
-                <functional>le(add(add(mul(gasCapacityA, gasCapacityA), mul(gasCapacityB, gasCapacityB)), mul(gasCapacityC, gasCapacityC)), limit)</functional>
+                <functional>le(add(add(mul(gasCapacityA, gasFactorA), mul(gasCapacityB, gasFactorB)), mul(gasCapacityC, gasFactorC)), limit)</functional>
             </expression>
         </predicate>
     </predicates>

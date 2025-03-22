@@ -6,7 +6,10 @@ config:
     file: "./logs/app.log"
 
   outline:
-    countries: ['AO', 'BW', 'CD', 'LS', 'MW', 'MZ', 'NA', 'SZ', 'TZ', 'ZA', 'ZM', 'ZW']
-    year: 2050
-    file_path: '../../data/TEMBA_SSP1-26.xlsx'
+    countries: ['ZM', 'ZW', 'MZ'] #['AO', 'BW', 'CD', 'LS', 'MW', 'MZ', 'NM', 'SZ', 'TZ', 'ZA', 'ZM', 'ZW']
+    year: 2030
+    data_file_path: './data/TEMBA_SSP1-26.xlsx'
+    tech_code_file_path: './data/techcodes(in).csv'
+    fuel_code_file_path: './data/fuelcodes(in).csv'
+
   

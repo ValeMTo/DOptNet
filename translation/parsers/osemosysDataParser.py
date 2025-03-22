@@ -1,7 +1,7 @@
 import pandas as pd
 
 class localDataParserClass:
-    def __init__(self, logger, file_path):
+    def __init__(self, logger, file_path, ): #tech_path, fuel_path):
         self.logger = logger
         self.logger.info("Local Data parser initialized")
         self.data_file_path = file_path
@@ -21,7 +21,7 @@ class localDataParserClass:
         residualCapacity_df = pd.read_excel(self.data_file_path, sheet_name="ResidualCapacity")
         residualCapacity_df['COUNTRY'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[:2])
         residualCapacity_df['TECH'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[2:])
-        new_df = residualCapacity_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'MIN_INSTALLED_CAPACITY'})
+        new_df = residualCapacity_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'MIN_INSTALLED_CAPACITY'})
         new_df['MIN_INSTALLED_CAPACITY'] = pd.to_numeric(new_df['MIN_INSTALLED_CAPACITY'], errors='coerce')
         
         new_df['MIN_INSTALLED_CAPACITY'] = self.convert_fromGW_capacity_unit(new_df['MIN_INSTALLED_CAPACITY'], unit)
@@ -33,13 +33,13 @@ class localDataParserClass:
         capacity_factors_df['COUNTRY'] = capacity_factors_df['TECHNOLOGY'].map(lambda x: x[:2])
         capacity_factors_df['TECH'] = capacity_factors_df['TECHNOLOGY'].map(lambda x: x[2:])
 
-        new_df = capacity_factors_df[['COUNTRY', 'TECH', 'TIMESLICE', year]].rename(columns={year: 'CAPACITY_FACTOR'})
+        new_df = capacity_factors_df[['COUNTRY', 'TECHNOLOGY', 'TIMESLICE', year]].rename(columns={year: 'CAPACITY_FACTOR'})
         new_df['CAPACITY_FACTOR'] = pd.to_numeric(new_df['CAPACITY_FACTOR'], errors='coerce')
 
         if not timeslices:
             # Select only numeric columns before applying mean
             numeric_cols = ['CAPACITY_FACTOR']
-            new_df = new_df.groupby(['COUNTRY', 'TECH'], as_index=False)[numeric_cols].mean()
+            new_df = new_df.groupby(['COUNTRY', 'TECHNOLOGY'], as_index=False)[numeric_cols].mean()
 
         return new_df
     
@@ -48,7 +48,7 @@ class localDataParserClass:
         availability_factors_df['COUNTRY'] = availability_factors_df['TECHNOLOGY'].map(lambda x: x[:2])
         availability_factors_df['TECH'] = availability_factors_df['TECHNOLOGY'].map(lambda x: x[2:])
 
-        new_df = availability_factors_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'AVAILABILITY_FACTOR'})
+        new_df = availability_factors_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'AVAILABILITY_FACTOR'})
         new_df['AVAILABILITY_FACTOR'] = pd.to_numeric(new_df['AVAILABILITY_FACTOR'], errors='coerce')
 
         return new_df
@@ -58,27 +58,33 @@ class localDataParserClass:
         capacity_to_activity_unit_df['COUNTRY'] = capacity_to_activity_unit_df['TECHNOLOGY'].map(lambda x: x[:2])
         capacity_to_activity_unit_df['TECH'] = capacity_to_activity_unit_df['TECHNOLOGY'].map(lambda x: x[2:])
 
-        new_df = capacity_to_activity_unit_df[['COUNTRY', 'TECH', 'Value']].rename(columns={'Value': 'CAPACITY_TO_ACTIVITY_UNIT'})
+        new_df = capacity_to_activity_unit_df[['COUNTRY', 'TECHNOLOGY', 'Value']].rename(columns={'Value': 'CAPACITY_TO_ACTIVITY_UNIT'})
         new_df['CAPACITY_TO_ACTIVITY_UNIT'] = pd.to_numeric(new_df['CAPACITY_TO_ACTIVITY_UNIT'], errors='coerce')
 
         return new_df
     
-    def extract_specified_annual_demand(self, year):
+    def extract_specified_annual_demand(self, year, unit='PJ'):
+        #Assuming that we are interesting only to the electricity demand
         specified_annual_demand_df = pd.read_excel(self.data_file_path, sheet_name="SpecifiedAnnualDemand")
         specified_annual_demand_df['COUNTRY'] = specified_annual_demand_df['FUEL'].map(lambda x: x[:2])
-        specified_annual_demand_df['FUEL_NAME'] = specified_annual_demand_df['FUEL'].map(lambda x: x[2:])
 
-        new_df = specified_annual_demand_df[['COUNTRY', 'FUEL_NAME', year]].rename(columns={year: 'SPECIFIED_ANNUAL_DEMAND'})
+        new_df = specified_annual_demand_df[['COUNTRY', 'FUEL', year]].rename(columns={year: 'SPECIFIED_ANNUAL_DEMAND'})
         new_df['SPECIFIED_ANNUAL_DEMAND'] = pd.to_numeric(new_df['SPECIFIED_ANNUAL_DEMAND'], errors='coerce')
+        
+        if unit == 'TJ':
+            new_df['SPECIFIED_ANNUAL_DEMAND'] = new_df['SPECIFIED_ANNUAL_DEMAND'] * 1000
+        elif unit == 'PJ':
+            new_df['SPECIFIED_ANNUAL_DEMAND'] = new_df['SPECIFIED_ANNUAL_DEMAND']
+        else:
+            raise ValueError("Unit must be 'PJ' or 'TJ'")
 
         return new_df
 
     def extract_specified_demand_profile(self, year, timeslices=False):
         specifiedDemandProfile_df = pd.read_excel(self.data_file_path, sheet_name="SpecifiedDemandProfile")
         specifiedDemandProfile_df['COUNTRY'] = specifiedDemandProfile_df['FUEL'].map(lambda x: x[:2])
-        specifiedDemandProfile_df['FUEL_NAME'] = specifiedDemandProfile_df['FUEL'].map(lambda x: x[2:])
 
-        new_df = specifiedDemandProfile_df[['COUNTRY', 'FUEL_NAME', 'TIMESLICE', year]].rename(columns={year: 'SPECIFIED_DEMAND_PROFILE'})
+        new_df = specifiedDemandProfile_df[['COUNTRY', 'FUEL', 'TIMESLICE', year]].rename(columns={year: 'SPECIFIED_DEMAND_PROFILE'})
         new_df['SPECIFIED_DEMAND_PROFILE'] = pd.to_numeric(new_df['SPECIFIED_DEMAND_PROFILE'], errors='coerce')
 
         if not timeslices:
@@ -152,33 +158,49 @@ class localDataParserClass:
 
         return new_df
     
-    def extract_total_annual_max_capacity(self, year):
+    def extract_total_annual_max_capacity(self, year, unit='GW'):
         total_annual_capacity_df = pd.read_excel(self.data_file_path, sheet_name="TotalAnnualMaxCapacity")
         total_annual_capacity_df['COUNTRY'] = total_annual_capacity_df['TECHNOLOGY'].map(lambda x: x[:2])
-        total_annual_capacity_df['TECH'] = total_annual_capacity_df['TECHNOLOGY'].map(lambda x: x[2:])
+        total_annual_capacity_df['TECHNOLOGY'] = total_annual_capacity_df['TECHNOLOGY'].map(lambda x: x[2:])
 
-        new_df = total_annual_capacity_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'TOTAL_ANNUAL_CAPACITY'})
+        new_df = total_annual_capacity_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'TOTAL_ANNUAL_CAPACITY'})
         new_df['TOTAL_ANNUAL_CAPACITY'] = pd.to_numeric(new_df['TOTAL_ANNUAL_CAPACITY'], errors='coerce')
+        new_df = new_df[new_df['TOTAL_ANNUAL_CAPACITY'] != 99999999]
+
+        new_df['TOTAL_ANNUAL_CAPACITY'] = self.convert_fromGW_capacity_unit(new_df['TOTAL_ANNUAL_CAPACITY'], unit)
 
         return new_df
     
-    def extract_total_technology_annual_activity_upper_limit(self, year):
+    def convert_fromPJ_energy_unit(self, data, unit):
+        if unit == 'PJ':
+            data = data
+        elif unit == 'TJ':
+            data = data * 1000
+        else:
+            raise ValueError("Unit must be 'PJ' or 'TJ'")
+        return data
+
+    def extract_total_technology_annual_activity_upper_limit(self, year, unit='PJ'):
         total_annual_activity_upper_limit_df = pd.read_excel(self.data_file_path, sheet_name="TotalTechnologyAnnualActivityUp")
         total_annual_activity_upper_limit_df['COUNTRY'] = total_annual_activity_upper_limit_df['TECHNOLOGY'].map(lambda x: x[:2])
-        total_annual_activity_upper_limit_df['TECH'] = total_annual_activity_upper_limit_df['TECHNOLOGY'].map(lambda x: x[2:])
+        total_annual_activity_upper_limit_df['TECHNOLOGY'] = total_annual_activity_upper_limit_df['TECHNOLOGY']
 
-        new_df = total_annual_activity_upper_limit_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'})
+        new_df = total_annual_activity_upper_limit_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'})
         new_df['TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'] = pd.to_numeric(new_df['TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'], errors='coerce')
 
+        new_df['TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'] = self.convert_fromPJ_energy_unit(new_df['TOTAL_ANNUAL_ACTIVITY_UPPER_LIMIT'], unit)
+        
         return new_df
     
-    def extract_total_technology_annual_activity_lower_limit(self, year):
+    def extract_total_technology_annual_activity_lower_limit(self, year, unit='PJ'):
         total_annual_activity_upper_limit_df = pd.read_excel(self.data_file_path, sheet_name="TotalTechnologyAnnualActivityLo")
         total_annual_activity_upper_limit_df['COUNTRY'] = total_annual_activity_upper_limit_df['TECHNOLOGY'].map(lambda x: x[:2])
-        total_annual_activity_upper_limit_df['TECH'] = total_annual_activity_upper_limit_df['TECHNOLOGY'].map(lambda x: x[2:])
+        total_annual_activity_upper_limit_df['TECHNOLOGY'] = total_annual_activity_upper_limit_df['TECHNOLOGY']
 
-        new_df = total_annual_activity_upper_limit_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'})
+        new_df = total_annual_activity_upper_limit_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'})
         new_df['TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'] = pd.to_numeric(new_df['TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'], errors='coerce')
+
+        new_df['TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'] = self.convert_fromPJ_energy_unit(new_df['TOTAL_ANNUAL_ACTIVITY_LOWER_LIMIT'], unit)
 
         return new_df
     
@@ -217,9 +239,48 @@ class localDataParserClass:
         return new_df
     
     def extract_technologies_per_country(self):
-
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
-        technologies_df['TECHNOLOGY'] = technologies_df[0]
         technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
+        technologies_df['TECHNOLOGY'] = technologies_df[0]
+        technologies_df.drop(columns=[0], inplace=True)
+        timeslice_df = pd.read_excel(self.data_file_path, sheet_name="TIMESLICE", header=None)
+        timeslice_df['TIMESLICE'] = timeslice_df[0]
+        timeslice_df.drop(columns=[0], inplace=True)
+        modeofoperation_df = pd.read_excel(self.data_file_path, sheet_name="MODE_OF_OPERATION", header=None)
+        modeofoperation_df['MODE_OF_OPERATION'] = modeofoperation_df[0]
+        modeofoperation_df.drop(columns=[0], inplace=True)
 
-        return technologies_df[['COUNTRY', 'TECHNOLOGY']]
+        expanded_df = technologies_df.loc[technologies_df.index.repeat(len(modeofoperation_df))].reset_index(drop=True)
+        expanded_df['MODE_OF_OPERATION'] = modeofoperation_df.iloc[:, 0].values.tolist() * len(technologies_df)
+
+        completely_expanded_df = expanded_df.loc[expanded_df.index.repeat(len(timeslice_df))].reset_index(drop=True)
+        completely_expanded_df['TIMESLICE'] = timeslice_df.iloc[:, 0].values.tolist() * len(expanded_df)
+
+        completely_expanded_df['VARIABLE'] = completely_expanded_df['TIMESLICE'] + '_' + completely_expanded_df['TECHNOLOGY'] + '_' + completely_expanded_df['MODE_OF_OPERATION'].map(str)
+
+        return completely_expanded_df[['COUNTRY', 'TECHNOLOGY', 'VARIABLE', 'MODE_OF_OPERATION']]
+
+    def extract_output_activity_ratio(self, year):
+        technologies_df = pd.read_excel(self.data_file_path, sheet_name="OutputActivityRatio")
+        technologies_df['COUNTRY'] = technologies_df['TECHNOLOGY'].map(lambda x: x[:2])
+        technologies_df['TECHNOLOGY'] = technologies_df['TECHNOLOGY']
+        technologies_df = technologies_df[['COUNTRY', 'TECHNOLOGY', 'FUEL', 'MODEOFOPERATION', year]].rename(columns={year: 'OUTPUT_ACTIVITY_RATIO', 'MODEOFOPERATION': 'MODE_OF_OPERATION'})
+        technologies_df['OUTPUT_ACTIVITY_RATIO'] = pd.to_numeric(technologies_df['OUTPUT_ACTIVITY_RATIO'], errors='coerce')
+
+        return technologies_df
+    
+    def extract_input_activity_ratio(self, year):
+        technologies_df = pd.read_excel(self.data_file_path, sheet_name="InputActivityRatio")
+        technologies_df['COUNTRY'] = technologies_df['TECHNOLOGY'].map(lambda x: x[:2])
+        technologies_df['TECHNOLOGY'] = technologies_df['TECHNOLOGY']
+        technologies_df = technologies_df[['COUNTRY', 'TECHNOLOGY', 'FUEL', 'MODEOFOPERATION', year]].rename(columns={year: 'INPUT_ACTIVITY_RATIO', 'MODEOFOPERATION': 'MODE_OF_OPERATION'})
+        technologies_df['INPUT_ACTIVITY_RATIO'] = pd.to_numeric(technologies_df['INPUT_ACTIVITY_RATIO'], errors='coerce')
+
+        return technologies_df
+    
+    def extract_fuels(self):
+        fuels_df = pd.read_excel(self.data_file_path, sheet_name="FUEL", header=None)
+        fuels_df['FUEL'] = fuels_df[0]
+        fuels_df.drop(columns=[0], inplace=True)
+        return fuels_df
+
