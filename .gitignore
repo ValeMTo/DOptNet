@@ -25,3 +25,4 @@ solutions/*
 !solutions/*.py
 
 translation/parsers/retrieve_osemosys_data.ipynb
+.DS_Store
