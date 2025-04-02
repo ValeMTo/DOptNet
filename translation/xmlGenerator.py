@@ -1,4 +1,6 @@
 import xml.etree.ElementTree as ET
+from deprecated import deprecated
+import pandas as pd
 
 class XMLGeneratorClass:
     def __init__(self, logger):
@@ -44,6 +46,43 @@ class XMLGeneratorClass:
         for name, values in domain_values.items():
             ET.SubElement(domains_element, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
 
+    def add_variable_from_name(self, technologies, variables, agents):
+
+        variables_element = self.instance.find("variables")
+        if variables_element is None:
+            variables_element = ET.SubElement(self.instance, "variables")
+
+        variable_list = []
+        for tech_capacity in technologies:
+            ET.SubElement(variables_element, "variable", {
+                    "name": f"{tech_capacity}_capacity", 
+                    "domain": "installable_capacity_domain", 
+                    "agent": tech_capacity[:2]
+                })
+            variable_list.append(f"{tech_capacity}_capacity")
+        for variable_rateOfCapacity in variables:
+            ET.SubElement(variables_element, "variable", {
+                "name": f"{variable_rateOfCapacity}_rateActivity", 
+                "domain": "rate_activity_domain", 
+                "agent": variable_rateOfCapacity.split('_')[1][:2]
+            })
+            variable_list.append(f"{variable_rateOfCapacity}_rateActivity")
+
+        #TODO: change once the agent_names are not only neighboring
+        # for fuel in fuels:
+        #     for agent in agents:
+        #         for agent2 in agents:
+        #             if agent != agent2:
+        #                 ET.SubElement(variables_element, "variable", {
+        #                     "name": f"transmission_{agent}_{agent2}",
+        #                     "domain": "trasferable_capacity_domain",
+        #                     "agent": agent
+        #                 })
+        #                 variable_list.append(f"transmission_{agent}_{agent2}")
+
+        return variable_list
+
+    @deprecated
     def add_variables(self, technologies, agent_names):
         """Adds multiple variables inside a single <variables> element."""
         variables_element = self.instance.find("variables")
@@ -53,36 +92,34 @@ class XMLGeneratorClass:
         variable_list = []
         for technology in technologies:
             for agent in agent_names:
-                formatted_agent = agent.capitalize()
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}capacity", 
+                    "name": f"{agent}{technology}_capacity", 
                     "domain": "installable_capacity_domain", 
                     "agent": agent
                 })
                 ET.SubElement(variables_element, "variable", {
-                    "name": f"{technology}{formatted_agent}capFactor", 
-                    "domain": "capacity_factors_domain", 
+                    "name": f"{agent}{technology}_rateActivity", 
+                    "domain": "rate_activity_domain", 
                     "agent": agent
                 })
-                variable_list.append(f"{technology}{formatted_agent}capacity")
-                variable_list.append(f"{technology}{formatted_agent}capFactor")
+                variable_list.append(f"{agent}{technology}_capacity")
+                variable_list.append(f"{agent}{technology}_rateActivity")
 
         # TODO: change once the agent_names are not only neighboring
         for agent in agent_names:
             for agent2 in agent_names:
                 if agent != agent2:
-                    formatted_agent1 = agent.capitalize()
-                    formatted_agent2 = agent2.capitalize()
                     ET.SubElement(variables_element, "variable", {
-                        "name": f"transmission{formatted_agent1}{formatted_agent2}",
+                        "name": f"transmission_{agent}_{agent2}",
                         "domain": "trasferable_capacity_domain",
                         "agent": agent
                     })
-                    variable_list.append(f"transmission{formatted_agent1}{formatted_agent2}")
+                    variable_list.append(f"transmission_{agent}_{agent2}")
 
         return variable_list
     
     def find_predicates_functions_main_elements(self, type):
+        """Finds the main element for predicates or functions."""
         predicates_element = self.instance.find("predicates")
         if (predicates_element is None):
             predicates_element = ET.SubElement(self.instance, "predicates")
@@ -192,49 +229,340 @@ class XMLGeneratorClass:
             reference="withinMaxCapacity",
             parameters=f"{variable_name} {str(max_capacity)}"
         )
-    
-    def add_minimum_capacity_factor_constraint(self, variable_name, min_capacity_factor):
-        """Adds an hard constraint to the XML instance that enforces minimum capacity factor."""
 
-        if not isinstance(min_capacity_factor, int):
-            raise ValueError("min_capacity_factor must be an integer")
+    #TODO: to implement again - quick wrap up
+    def add_minimum_respecting_demand(self, timeslice_technologies_modes, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
+        def build_recursive(variables):
+            if len(variables) == 1:
+                return variables[0]
+            return add(variables[0], build_recursive(variables[1:]))
         
-        if not self.find_predicate("minimumCapacityFactor"):
-            self.add_predicate(
-                name="minimumCapacityFactor", 
-                parameters="int capacity_factor int min_capacity_factor", 
-                functional=boolean_ge("capacity_factor", "min_capacity_factor")
-            )
+        demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
+        demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
         
-        self.add_constraint(
-            name=f"minimumCapacityFactor_{variable_name}", 
-            arity=1, 
-            scope=variable_name, 
-            reference="minimumCapacityFactor",
-            parameters=f"{variable_name} {min_capacity_factor}"
-        )
-        
-    def add_maximum_capacity_factor_constraint(self, variable_name, max_capacity_factor):
-        """Adds an hard constraint to the XML instance that enforces maximum capacity factor."""
+        agents = specified_annual_demand_df['COUNTRY'].unique()
+        timeslices = specified_demand_profile_df['TIMESLICE'].unique()
 
-        if not isinstance(max_capacity_factor, int):
-            raise ValueError("max_capacity_factor must be an integer")
-        
-        if not self.find_predicate("maximumCapacityFactor"):
-            self.add_predicate(
-                name="maximumCapacityFactor", 
-                parameters="int capacity_factor int max_capacity_factor", 
-                functional=boolean_le("capacity_factor", "max_capacity_factor")
-            )
-        
-        self.add_constraint(
-            name=f"maximumCapacityFactor_{variable_name}", 
-            arity=1, 
-            scope=variable_name, 
-            reference="maximumCapacityFactor",
-            parameters=f"{variable_name} {max_capacity_factor}"
-        )
+        for r in agents:
+            for l in timeslices:
+                yearsplit_constant = year_split_df[(year_split_df['TIMESLICE'] == l)]['YEAR_SPLIT'].values[0]
+                yearsplit_constant = round(1/yearsplit_constant)
+                per_timeslice_country_variables = [var + "_rateActivity" for var in timeslice_technologies_modes if var.split('_')[0] == l and var.split('_')[1][:2] == r]
+                specified_demand = demand_df[(demand_df['COUNTRY'] == r) & (demand_df['TIMESLICE'] == l)]['DEMAND_PER_TIMESLICE'].values[0]
+
+                if not self.find_predicate(f"minimumRespectingDemand_{r}"):
+                    self.add_predicate(
+                        name=f"minimumRespectingDemand_{r}", 
+                        parameters="int specified_demand int " + " int ".join([var.replace(f'{l}_', '') for var in per_timeslice_country_variables]),
+                        functional=boolean_ge(build_recursive([var.replace(f'{l}_', '') for var in per_timeslice_country_variables]), "specified_demand")
+                    )
+                
+                self.add_constraint(
+                    name=f"minimumRespectingDemand_{r}_{l}", 
+                    arity=len(per_timeslice_country_variables), 
+                    scope=" ".join(per_timeslice_country_variables),
+                    reference=f"minimumRespectingDemand_{r}",
+                    parameters=f"{round(specified_demand * yearsplit_constant)} {' '.join([var for var in per_timeslice_country_variables])}"
+                )
+
+                if len(per_timeslice_country_variables) > self.max_arity:
+                    self.max_arity = len(per_timeslice_country_variables)
+
     
+    def add_minimum_rate_of_activity_constraint(self, input_output_activity_ratio_df, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
+        """Adds an hard constraint to the XML instance that enforces minimum rate fo activity."""
+        def build_recursive(per_fuel_input_output_activity_ratio_df, year_split_weight):
+            def process_row(row):
+                factor = (row["OUTPUT_ACTIVITY_RATIO"] - row["INPUT_ACTIVITY_RATIO"]) * year_split_weight
+                if factor >= 1:
+                    return mul(f"{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}_rateActivity", f"factor_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}")
+                elif 0 < factor < 1:
+                    return div(f"{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}_rateActivity", f"factor_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}")
+                elif factor < 0 or factor > -1:
+                    return neg(div(f"{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}_rateActivity", f"factor_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}"))
+                elif factor == 0:
+                    raise ValueError("The factor should not be zero")
+                else:
+                    return neg(mul(f"{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}_rateActivity", f"factor_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}"))
+
+            if len(per_fuel_input_output_activity_ratio_df) == 1:
+                return process_row(per_fuel_input_output_activity_ratio_df.iloc[0])
+
+            first_row_expression = process_row(per_fuel_input_output_activity_ratio_df.iloc[0])
+            remaining_expression = build_recursive(per_fuel_input_output_activity_ratio_df.iloc[1:], year_split_weight)
+            return add(remaining_expression, first_row_expression)
+
+        timeslices = specified_demand_profile_df['TIMESLICE'].unique()
+        fuels = pd.Series(
+            list(input_output_activity_ratio_df['FUEL'].unique()) +
+            list(specified_annual_demand_df['FUEL'].unique())
+        ).unique()
+        demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
+        demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
+        for l in timeslices:
+            year_split_weight = year_split_df[(year_split_df['TIMESLICE'] == l)]['YEAR_SPLIT'].values[0]
+            for f in fuels:
+                per_fuel_input_output_activity_ratio_df = input_output_activity_ratio_df[(input_output_activity_ratio_df['FUEL'] == f)]
+                per_fuel_input_output_activity_ratio_df = per_fuel_input_output_activity_ratio_df[
+                    (per_fuel_input_output_activity_ratio_df["OUTPUT_ACTIVITY_RATIO"] - per_fuel_input_output_activity_ratio_df["INPUT_ACTIVITY_RATIO"]) != 0
+                ]
+                if len(per_fuel_input_output_activity_ratio_df) != 0:
+                    if f in specified_annual_demand_df['FUEL'].unique():
+                        specified_demand = round(demand_df[(demand_df['FUEL'] == f) & (demand_df['TIMESLICE'] == l)]['DEMAND_PER_TIMESLICE'].values[0])
+                    else:
+                        specified_demand = 0
+                    if specified_demand >0:
+                        rateOfActivity_variables = [
+                            f"{l}_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}_rateActivity" 
+                            for _, row in per_fuel_input_output_activity_ratio_df.iterrows()
+                        ]
+                        factor_weights = [
+                            f"factor_{row['TECHNOLOGY']}_{row['MODE_OF_OPERATION']}" 
+                            for _, row in per_fuel_input_output_activity_ratio_df.iterrows()
+                        ]
+                        
+                        if not self.find_predicate(f"minimumRateOfActivity_{f}"):
+                            self.add_predicate(
+                                name=f"minimumRateOfActivity_{f}", 
+                                parameters="int " + " int ".join(map(lambda x: x[5:], rateOfActivity_variables)) +" int "+  " int ".join(factor_weights) + " int specified_demand",
+                                functional=boolean_ge(build_recursive(per_fuel_input_output_activity_ratio_df, year_split_weight), "specified_demand")
+                            )
+
+                        if len(rateOfActivity_variables) > self.max_arity:
+                            self.max_arity = len(rateOfActivity_variables)
+                        
+                        weights = []
+                        for _, row in per_fuel_input_output_activity_ratio_df.iterrows():
+                            factor = (row["OUTPUT_ACTIVITY_RATIO"] - row["INPUT_ACTIVITY_RATIO"]) * year_split_weight
+                            if factor >= 1 or factor == 0:
+                                factor = round(factor)
+                            elif 0 < factor < 1:
+                                factor = round(1/factor)
+                            elif factor < 0 or factor > -1:
+                                factor = round(-1/factor)
+                            else:
+                                factor = round(-factor)
+                            weights.append(str(factor))
+                            
+                        self.add_constraint(
+                            name=f"minimumRateOfActivity_{f}_{l}", 
+                            arity=len(rateOfActivity_variables), 
+                            scope=" ".join(rateOfActivity_variables),
+                            reference=f"minimumRateOfActivity_{f}",
+                            parameters=f"{' '.join(rateOfActivity_variables)} {' '.join(weights)} {specified_demand}"
+                        )
+    def add_maximum_annual_activity_rate_per_timeslice_constraint(self, modes, factors_df):
+        
+        if not self.find_predicate("maximumAnnualRateActivityPerTimeslice"):
+            self.add_predicate(
+                name="maximumAnnualRateActivityPerTimeslice_mul", 
+                parameters="int annualRatePerTimeslice int capacity int factor", 
+                functional=boolean_le("annualRatePerTimeslice", mul("capacity", "factor"))
+            )
+
+        if not self.find_predicate("maximumAnnualRateActivityPerTimeslice_div"):
+            self.add_predicate(
+                name="maximumAnnualRateActivityPerTimeslice_div", 
+                parameters="int annualRatePerTimeslice int capacity int factor", 
+                functional=boolean_le("annualRatePerTimeslice", div("capacity", "factor"))
+            )
+
+        grouped_factors = factors_df.groupby(['COUNTRY', 'TECHNOLOGY'])
+        for (country, technology), group in grouped_factors:
+            factor = 0
+            for index, row in group.iterrows():
+                factor = row['CAPACITY_FACTOR'] * row['AVAILABILITY_FACTOR'] * row['CAPACITY_TO_ACTIVITY_UNIT']
+
+                for timeslice_tech_mode in [f"{row['TIMESLICE']}_{row['TECHNOLOGY']}_{mode}" for mode in modes]:
+                    if factor >= 1 or factor == 0:
+                        self.add_constraint(
+                            name=f"maximumAnnualRateActivityPerTimeslice_mul_{timeslice_tech_mode}",
+                            arity=2,
+                            scope=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity",
+                            reference="maximumAnnualRateActivityPerTimeslice_mul",
+                            parameters=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity {round(factor)}"
+                        )
+                    elif factor < 1 and factor > 0:
+                        self.add_constraint(
+                            name=f"maximumAnnualRateActivityPerTimeslice_div_{timeslice_tech_mode}",
+                            arity=2,
+                            scope=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity",
+                            reference="maximumAnnualRateActivityPerTimeslice_div",
+                            parameters=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity {round(1/factor)}"
+                        )
+                    else:
+                        raise ValueError("The factor should be positive")
+
+    def add_minimum_annual_activity_rate_per_timeslice_constraint(self, modes, factors_df, non_dispatchable_technologies):
+        
+        if not self.find_predicate("minimumAnnualRateActivityPerTimeslice"):
+            self.add_predicate(
+                name="minimumAnnualRateActivityPerTimeslice_mul", 
+                parameters="int annualRatePerTimeslice int capacity int factor", 
+                functional=boolean_ge("annualRatePerTimeslice", mul("capacity", "factor"))
+            )
+
+        if not self.find_predicate("minimumAnnualRateActivityPerTimeslice_div"):
+            self.add_predicate(
+                name="minimumAnnualRateActivityPerTimeslice_div", 
+                parameters="int annualRatePerTimeslice int capacity int factor", 
+                functional=boolean_ge("annualRatePerTimeslice", div("capacity", "factor"))
+            )
+
+        grouped_factors = factors_df.groupby(['COUNTRY', 'TECHNOLOGY'])
+        for (country, technology), group in grouped_factors:
+            if technology[2:] in non_dispatchable_technologies:
+                for index, row in group.iterrows():
+                    factor = 0.85 * row['CAPACITY_FACTOR'] * row['AVAILABILITY_FACTOR'] * row['CAPACITY_TO_ACTIVITY_UNIT']
+                    for timeslice_tech_mode in [f"{row['TIMESLICE']}_{row['TECHNOLOGY']}_{mode}" for mode in modes]:
+                        if factor >= 1 or factor == 0:
+                            self.add_constraint(
+                                name=f"minimumAnnualRateActivityPerTimeslice_mul_{timeslice_tech_mode}",
+                                arity=2,
+                                scope=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity",
+                                reference="minimumAnnualRateActivityPerTimeslice_mul",
+                                parameters=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity {round(factor)}"
+                            )
+                        elif factor < 1 and factor > 0:
+                            self.add_constraint(
+                                name=f"minimumAnnualRateActivityPerTimeslice_div_{timeslice_tech_mode}",
+                                arity=2,
+                                scope=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity",
+                                reference="minimumAnnualRateActivityPerTimeslice_div",
+                                parameters=f"{timeslice_tech_mode}_rateActivity {row['TECHNOLOGY']}_capacity {round(1/factor)}"
+                            )
+                        else:
+                            raise ValueError("The factor should be positive")
+
+    def add_maximum_rate_of_activity_per_all_technology_constraint(self, modes, factors_df):
+        """Adds an hard constraint to the XML instance that enforces maximum rate fo activity."""
+        def build_recursive(modes, timeslices):
+            if len(modes) == 2:
+                if len(timeslices) == 1:
+                    return div(add(f"{timeslices[0]}_{modes[0]}", f"{timeslices[0]}_{modes[1]}"), f"yearsplit_{timeslices[0]}")
+                return add(div(add(f"{timeslices[0]}_{modes[0]}", f"{timeslices[0]}_{modes[1]}"), f"yearsplit_{timeslices[0]}"), build_recursive(modes, timeslices[1:]))
+            elif len(modes) == 1:
+                if len(timeslices) == 1:
+                    return div(f"{timeslices[0]}_{modes[0]}", f"yearsplit_{timeslices[0]}")
+                return add(div(f"{timeslices[0]}_{modes[0]}", f"yearsplit_{timeslices[0]}"), build_recursive(modes, timeslices[1:]))
+            else:
+                raise ValueError("The number of modes should be 1 or 2")
+
+        timeslices = factors_df['TIMESLICE'].unique()
+
+        if not self.find_predicate("maximumRateOfActivity_mul"):
+            self.add_predicate(
+                name="maximumRateOfActivity_mul", 
+                parameters=" ".join([f"int {l}_{m}" for m in modes for l in timeslices]) + " " + " ".join([f"int yearsplit_{l}" for l in timeslices]) + " int factor int installed_technology_capacity", 
+                functional= boolean_le(build_recursive(modes, timeslices) , mul("installed_technology_capacity","factor")),
+            )
+
+        if not self.find_predicate("maximumRateOfActivity_div"):
+            self.add_predicate(
+                name="maximumRateOfActivity_div", 
+                parameters=" ".join([f"int {l}_{m}" for m in modes for l in timeslices]) + " " + " ".join([f"int yearsplit_{l}" for l in timeslices]) + " int factor int installed_technology_capacity", 
+                functional= boolean_le(build_recursive(modes, timeslices) , div("installed_technology_capacity", "factor")),
+            )
+
+        grouped_factors = factors_df.groupby(['COUNTRY', 'TECHNOLOGY'])
+        for (country, technology), group in grouped_factors:
+            factor = 0
+            modes_variables = []
+            yearsplit_constants = []
+            for index, row in group.iterrows():
+                factor += row['CAPACITY_FACTOR'] * row['YEAR_SPLIT'] * row['AVAILABILITY_FACTOR'] * row['CAPACITY_TO_ACTIVITY_UNIT']
+                modes_variables += [f"{row['TIMESLICE']}_{row['TECHNOLOGY']}_{mode}" for mode in modes]
+                yearsplit_constants += [str(round(1/row['YEAR_SPLIT']))]
+            self.logger.debug(f"Factor: {factor}, Countries: {country}, Technology: {technology}")
+            self.logger.debug(group)
+
+            modes_variables_rateActivity = [f"{var}_rateActivity" for var in modes_variables]
+
+            if factor >= 1 or factor == 0:
+                self.add_constraint(
+                    name=f"maximumRateOfActivity_mul_{technology}",
+                    arity=len(modes_variables_rateActivity) + 1,
+                    scope=" ".join(modes_variables_rateActivity) + f" {technology}_capacity",
+                    reference="maximumRateOfActivity_mul",
+                    parameters=f"{' '.join(modes_variables_rateActivity)} {' '.join(yearsplit_constants)} {round(factor)} {technology}_capacity"
+                )
+            elif factor < 1 and factor > 0:
+                self.add_constraint(
+                    name=f"maximumRateOfActivity_div_{technology}",
+                    arity=len(modes_variables_rateActivity) + 1,
+                    scope=" ".join(modes_variables_rateActivity) + f" {technology}_capacity",
+                    reference="maximumRateOfActivity_div",
+                    parameters=f"{' '.join(modes_variables_rateActivity)} {' '.join(yearsplit_constants)} {round(1/factor)} {technology}_capacity"
+                )
+            else:
+                raise ValueError("The factor should be positive")
+
+            if len(modes_variables) > self.max_arity:
+                self.max_arity = len(modes_variables)
+
+
+    def add_min_max_total_technology_annual_activity_constraint(self, modes, year_split_df, technology, upper_limit, lower_limit):
+        def build_recursive(modes, timeslices):
+            if len(modes) == 2:
+                if len(timeslices) == 1:
+                    return div(add(f"{timeslices[0]}_{modes[0]}", f"{timeslices[0]}_{modes[1]}"), f"yearsplit_{timeslices[0]}")
+                return add(div(add(f"{timeslices[0]}_{modes[0]}", f"{timeslices[0]}_{modes[1]}"), f"yearsplit_{timeslices[0]}"), build_recursive(modes, timeslices[1:]))
+            elif len(modes) == 1:
+                if len(timeslices) == 1:
+                    return div(f"{timeslices[0]}_{modes[0]}", f"yearsplit_{timeslices[0]}")
+                return add(div(f"{timeslices[0]}_{modes[0]}", f"yearsplit_{timeslices[0]}"), build_recursive(modes, timeslices[1:]))
+            else:
+                raise ValueError("The number of modes should be 1 or 2")
+
+        yearsplit_constants = [str(round(1/row['YEAR_SPLIT'])) for _, row in year_split_df.iterrows()]
+        timeslices = year_split_df['TIMESLICE'].unique()
+        if upper_limit is not None and not pd.isna(upper_limit):
+            upper_limit = round(upper_limit)
+            if not self.find_predicate("annual_technological_maximumRateOfActivity"):
+                self.add_predicate(
+                    name="annual_technological_maximumRateOfActivity", 
+                    parameters=" ".join([f"int {l}_{m}" for m in modes for l in timeslices]) + " " + " ".join([f"int yearsplit_{l} " for l in timeslices]) + " int upper_limit", 
+                    functional= boolean_le(build_recursive(modes, timeslices) , "upper_limit"),
+                )
+            self.add_constraint(
+                name=f"annual_technological_maximumRateOfActivity_{technology}",
+                arity=len(timeslices) * len(modes),
+                scope=' '.join([f'{l}_{technology}_{m}_rateActivity' for m in modes for l in timeslices]),
+                reference="annual_technological_maximumRateOfActivity",
+                parameters=f"{' '.join([f'{l}_{technology}_{m}_rateActivity' for m in modes for l in timeslices])} {' '.join(yearsplit_constants)} {upper_limit}"
+            )
+            if len(timeslices) * len(modes) > self.max_arity:
+                self.max_arity = len(timeslices) * len(modes)
+            
+        if lower_limit is not None and not pd.isna(lower_limit):
+            lower_limit = round(lower_limit)
+            if not self.find_predicate("annual_technological_minimumRateOfActivity"):
+                self.add_predicate(
+                    name="annual_technological_minimumRateOfActivity", 
+                    parameters=" ".join([f"int {l}_{m}" for m in modes for l in timeslices]) + " " + " ".join([f"int yearsplit_{l}" for l in timeslices]) + " int lower_limit", 
+                    functional= boolean_ge(build_recursive(modes, timeslices) , "lower_limit"),
+                )
+            self.add_constraint(
+                name=f"annual_technological_minimumRateOfActivity_{technology}",
+                arity=len(timeslices) * len(modes),
+                scope=' '.join([f'{l}_{technology}_{m}_rateActivity' for m in modes for l in timeslices]),
+                reference="annual_technological_minimumRateOfActivity",
+                parameters=f"{' '.join([f'{l}_{technology}_{m}_rateActivity' for m in modes for l in timeslices])} {' '.join(yearsplit_constants)} {lower_limit}"
+            )
+
+            if len(timeslices) * len(modes) > self.max_arity:
+                self.max_arity = len(timeslices) * len(modes)
+
+    # def add_emission_accounting_constraint(self, emission_name, variables, modes, max_emission_limit, emission_factors_df, year_split_df):
+    #     def build_recursive(timeslices, modes, technologies, emission_factor_df):
+    #         if len(timeslices) == 1:
+
+    #         expression = ""
+    #         factor = emission_factor_df[(emission_factor_df['TECHNOLOGY'] == technology) & (emission_factor_df['MODE_OF_OPERATION'] == mode) & (emission_factor_df['TIMESLICE'])]['EMISSION_FACTOR'].values[0]
+        
+
+
+
     def add_min_transmission_capacity_constraint(self, transmission_variable_name, min_transmission_capacity):
         """Adds an hard constraint to the XML instance that enforces minimum transmission capacity."""
 
@@ -284,11 +612,11 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 random_key = technologies[0]
-                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
+                return mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity)")
 
             random_key = technologies[0]
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
+            return add(mul(mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
@@ -298,13 +626,13 @@ class XMLGeneratorClass:
             del technolgies_emission_costs[tech]
 
         technologies = technolgies_emission_costs.keys()
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies for agent_name in agents]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies for agent_name in agents]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies for agent_name in agents]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies for agent_name in agents]
         variables.sort()
 
-        functional_formula = build_recursive_expression(agents[0].capitalize(), technolgies_emission_costs)
+        functional_formula = build_recursive_expression(agents[0], technolgies_emission_costs)
         for agent in agents[1:]:
-            functional_formula = add(functional_formula, build_recursive_expression(agent.capitalize(), technolgies_emission_costs))
+            functional_formula = add(functional_formula, build_recursive_expression(agent, technolgies_emission_costs))
 
         if not self.find_predicate(f"withinMaxEmission_all"):
             self.add_predicate(
@@ -331,11 +659,11 @@ class XMLGeneratorClass:
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
                 random_key = technologies[0]
-                return mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor)")
+                return mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity)")
 
             random_key = technologies[0]
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(mul(f"{random_key}{agent_name}capacity", f"{random_key}{agent_name}capFactor"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
+            return add(mul(mul(f"{random_key}{agent_name}_capacity", f"{random_key}{agent_name}_rateActivity"), technolgies_emission_costs[random_key]), build_recursive_expression(agent_name, {k: v for k, v in technolgies_emission_costs.items() if k != random_key}))
         
         if not isinstance(max_emission, int):
             raise ValueError("max_emission must be an integer")
@@ -345,11 +673,11 @@ class XMLGeneratorClass:
             del technolgies_emission_costs[tech]
 
         technologies = technolgies_emission_costs.keys()
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies]
         variables.sort()
 
-        functional_formula = build_recursive_expression(agent_name.capitalize(), technolgies_emission_costs)
+        functional_formula = build_recursive_expression(agent_name, technolgies_emission_costs)
         if not self.find_predicate(f"withinMaxEmission_{agent_name}"):
             self.add_predicate(
                 name=f"withinMaxEmission_{agent_name}", 
@@ -368,26 +696,72 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
 
+    def add_specified_min_demand_constraint_per_agent(
+        self, 
+        agent_name,
+        rate_of_activity_variables,
+        trade_from_country_variables,
+        trade_to_country_variables,
+        max_demand
+        ):
+        """Adds an hard constraint to the XML instance that enforces maximum demand."""
+        def build_recursive_add_expression(espression, variables):
+            if len(variables) == 1:
+                return add(espression, variables[0])
+            return build_recursive_add_expression(add(espression, variables[0]), variables[1:])
+        def build_recursive_sub_expression(espression, variables):
+            if len(variables) == 1:
+                return sub(espression, variables[0])
+            return build_recursive_sub_expression(sub(espression, variables[0]), variables[1:])
+        
+        if not isinstance(max_demand, int):
+            raise ValueError("max_demand must be an integer")
+        
+        functional_expression = build_recursive_sub_expression(
+            build_recursive_add_expression(
+                build_recursive_add_expression(rate_of_activity_variables[0], rate_of_activity_variables[1:]), 
+                trade_to_country_variables), 
+                trade_from_country_variables)
+
+        all_variables = rate_of_activity_variables + trade_from_country_variables + trade_to_country_variables
+        if not self.find_predicate(f"maxSpecifiedDemandPerAgent_{agent_name}"):
+            self.add_predicate(
+                name=f"maxSpecifiedDemandPerAgent_{agent_name}", 
+                parameters= " ".join([f"int {variable}" for variable in all_variables]) + f" int max_demand",
+                functional=boolean_ge(functional_expression, "max_demand")
+            )
+
+        self.add_constraint(
+            name=f"maxSpecifiedDemandPerAgent_{agent_name}_{len(all_variables)}", 
+            arity=len(all_variables), 
+            scope=" ".join(all_variables), 
+            reference=f"maxSpecifiedDemandPerAgent_{agent_name}",
+            parameters=f"{' '.join(all_variables)} {max_demand}"
+        )
+
+        if len(all_variables) > self.max_arity:
+            self.max_arity = len(all_variables)
+
     def add_demand_constraint_per_agent(self, agent_name, min_demand, technologies, neighbor_agents):
         """Adds an hard constraint to the XML instance that enforces maximum demand."""
         def build_recursive_expression(technologies, agent_name):
             """Recursively builds the expression: 
             add(add(mul(tech1Capacity, tech1CapFactor), mul(tech2Capacity, tech2CapFactor)), mul(tech3Capacity, tech3CapFactor))"""
-            agent_name = agent_name.capitalize()
+            agent_name = agent_name
             # Base case: If only one technology remains, return its multiplication
             if len(technologies) == 1:
-                return mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor")
+                return mul(f"{technologies[0]}{agent_name}_capacity", f"{technologies[0]}{agent_name}_rateActivity")
 
             # Recursive case: Take the first technology, multiply its capacity and factor, then add to the rest
-            return add(mul(f"{technologies[0]}{agent_name}capacity", f"{technologies[0]}{agent_name}capFactor"), build_recursive_expression(technologies[1:], agent_name))
+            return add(mul(f"{technologies[0]}{agent_name}_capacity", f"{technologies[0]}{agent_name}_rateActivity"), build_recursive_expression(technologies[1:], agent_name))
             
         if not isinstance(min_demand, int):
             raise ValueError("min_demand must be an integer")
         
-        variables = [f"{technology}{agent_name.capitalize()}capacity" for technology in technologies]
-        variables += [f"{technology}{agent_name.capitalize()}capFactor" for technology in technologies]
-        outflow_transmission_variables = [f"transmission{agent_name.capitalize()}{agent2.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
-        inflow_transmission_variables = [f"transmission{agent2.capitalize()}{agent_name.capitalize()}" for agent2 in neighbor_agents if agent2 != agent_name]
+        variables = [f"{technology}{agent_name}_capacity" for technology in technologies]
+        variables += [f"{technology}{agent_name}_rateActivity" for technology in technologies]
+        outflow_transmission_variables = [f"transmission{agent_name}{agent2}" for agent2 in neighbor_agents if agent2 != agent_name]
+        inflow_transmission_variables = [f"transmission{agent2}{agent_name}" for agent2 in neighbor_agents if agent2 != agent_name]
         
         variables.sort()
         outflow_transmission_variables.sort()
@@ -420,7 +794,7 @@ class XMLGeneratorClass:
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
     
-    def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable_capFactor_name, cost_per_MWh):
+    def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable__rateActivity_name, cost_per_MWh):
         """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
 
         if not isinstance(weight, int) or not isinstance(cost_per_MWh, int):
@@ -432,17 +806,16 @@ class XMLGeneratorClass:
             if not self.find_function(f"minimize_operatingCost_mul"):
                 self.add_function(
                     name=f"minimize_operatingCost_mul", 
-                    parameters="int capacity int capFactor int weight",
-                    # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                    functional= neg(mul(mul("capacity", "capFactor"), "weight"))
+                    parameters="int capacity int _rateActivity int weight",
+                    functional= mul(mul("capacity", "_rateActivity"), "weight")
                 )
 
             self.add_constraint(
                 name=f"minimize_operatingCost_mul_{variable_capacity_name.replace('capacity', '')}",
                 arity=2,
-                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                scope=f"{variable_capacity_name} {variable__rateActivity_name}",
                 reference=f"minimize_operatingCost_mul",
-                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(round(complex_weight))}"
+                parameters=f"{variable_capacity_name} {variable__rateActivity_name} {str(round(complex_weight))}"
             )
         elif complex_weight < 1 and complex_weight >= 0:
             div_complex_weight = round(1 / complex_weight) if complex_weight != 0 else 10**6
@@ -451,16 +824,15 @@ class XMLGeneratorClass:
             if not self.find_function(f"minimize_operatingCost_div"):
                 self.add_function(
                     name=f"minimize_operatingCost_div", 
-                    parameters="int capacity int capFactor int weight",
-                    # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                    functional= neg(div(mul("capacity", "capFactor"), "weight"))
+                    parameters="int capacity int _rateActivity int weight",
+                    functional= div(mul("capacity", "_rateActivity"), "weight")
                 )
             self.add_constraint(
                 name=f"minimize_operatingCost_div_{variable_capacity_name.replace('capacity', '')}",
                 arity=2,
-                scope=f"{variable_capacity_name} {variable_capFactor_name}",
+                scope=f"{variable_capacity_name} {variable__rateActivity_name}",
                 reference=f"minimize_operatingCost_div",
-                parameters=f"{variable_capacity_name} {variable_capFactor_name} {str(div_complex_weight)}"
+                parameters=f"{variable_capacity_name} {variable__rateActivity_name} {str(div_complex_weight)}"
             )
         else:
             raise ValueError("the complex weight should be positive")
@@ -468,7 +840,7 @@ class XMLGeneratorClass:
         if self.max_arity < 2:
             self.max_arity = 2
 
-    def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW):
+    def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW, extra_name=""):
         """Adds a soft constraint to the XML instance that enforces maximum installing cost."""
 
         if not isinstance(weight, int) or not isinstance(cost_per_MW, int):
@@ -478,33 +850,66 @@ class XMLGeneratorClass:
             self.add_function(
                 name=f"minimize_installingCost", 
                 parameters="int weight int capacity int oldCapacity int cost_per_MW",
-                # Note: it is negative since the problem wants to minimize the cost and the problem scope is to maximize
-                functional= neg(div(mul(sub("capacity", "oldCapacity"), "cost_per_MW"), "weight"))
+                functional= div(mul(sub("capacity", "oldCapacity"), "cost_per_MW"), "weight")
             )
 
         self.add_constraint(
-            name=f"minimize_installingCost_{variable_capacity_name.replace('capacity', '')}",
+            name=f"minimize_installingCost_{variable_capacity_name.replace('_capacity', '')}_{extra_name}",
             arity=1,
             scope=f"{variable_capacity_name}",
             reference=f"minimize_installingCost",
             parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
-    
-    # def frame_xml(
-    #     self, 
-    #     name="defaultName", 
-    #     max_constraint_arity=1,
-    #     agent_names=None,
-    #     technologies=None
-    # ):
+
+    def add_minimizing_operating_cost_constraint(self, weight, rateActivity_variables, cost_per_unit_of_activity, year_split_df):
+        """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
+        def build_recursive(factors):
+            if len(factors) == 1:
+                return factors[0]
+            return add(factors[0], build_recursive(factors[1:]))
         
-    #     self.instance = self.create_frodo2_xml_head_instance()
-    #     self.instance = self.add_presentation(self.instance, name, max_constraint_arity, "True", "XCSP 2.1_FRODO")
+        if not isinstance(weight, int) or not isinstance(cost_per_unit_of_activity, int):
+            raise ValueError("weight and cost_per_MW must be integers")
+        
+        factor_expressions = []
+        numeric_factors = []
+        for var in rateActivity_variables:
+            factor = year_split_df[(year_split_df['TIMESLICE'] == var.split('_')[0])]['YEAR_SPLIT'].values[0]
+            factor *= cost_per_unit_of_activity
+            if factor >= 1 or factor == 0:
+                numeric_factors.append(str(round(factor)))
+                factor_expressions.append(mul(var.split('_')[0], f"factor_{var.split('_')[0]}"))
+            elif 0 < factor < 1:
+                numeric_factors.append(str(round(1/factor)))
+                factor_expressions.append(div(var.split('_')[0], f"factor_{var.split('_')[0]}"))
+            else:
+                raise ValueError("The factor should be positive")
 
-    #     self.instance = self.add_agents(self.instance, agent_names)
-    #     self.instance = self.add_domains(self.instance)
-    #     self.instance = self.add_variables(self.instance, technologies, agent_names)
+            # elif 0 < factor < 1:
+            #     numeric_factors.append(str(round(1/factor)))
+            #     factor_expressions.append(div(var.split('_')[0], f"factor_{var.split('_')[0]}"))
+            # else:
+            #     raise ValueError("The factor should be positive")
+            
+        if not self.find_function(f"minimize_operatingCost_{rateActivity_variables[0][5:].replace('_rateActivity', '')}"):
+            self.add_function(
+                name=f"minimize_operatingCost_{rateActivity_variables[0][5:].replace('_rateActivity', '')}", 
+                parameters=" ".join([f"int {var.split('_')[0]}" for var in rateActivity_variables]) + " " + " ".join([f"int factor_{var.split('_')[0]}" for var in rateActivity_variables]) + " int weight",
+                functional= div(build_recursive(factor_expressions), "weight")
+            )
+        if not all(factor == "0" for factor in numeric_factors):
+            self.add_constraint(
+                name=f"minimize_operatingCost_{rateActivity_variables[0][5:].replace('_rateActivity', '')}_{len(rateActivity_variables)}",
+                arity=len(rateActivity_variables),
+                scope=" ".join(rateActivity_variables),
+                reference=f"minimize_operatingCost_{rateActivity_variables[0][5:].replace('_rateActivity', '')}",
+                parameters=f"{' '.join(rateActivity_variables)} {' '.join(numeric_factors)} {weight}"
+            )
 
+        if len(rateActivity_variables) > self.max_arity:
+            self.max_arity = len(rateActivity_variables)
+        
+    
     def print_xml(self, output_file = "defaultName_problem.xml"):
         """Prints the XML instance to a file."""
         self.set_max_arity_contraints()
