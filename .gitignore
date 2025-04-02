@@ -24,3 +24,4 @@ solution.xml
 solutions/*
 !solutions/*.py
 
+translation/parsers/retrieve_osemosys_data.ipynb
