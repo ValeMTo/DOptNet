@@ -20,3 +20,7 @@ solution.xml
 translation/test.ipynb
 solution.xml
 .DS_Store
+
+solutions/*
+!solutions/*.py
+
