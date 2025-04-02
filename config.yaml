@@ -1,15 +1,13 @@
 config:
-  name: "Zambezi"
-
   logging:
-    level: "DEBUG"
-    file: "./logs/app.log"
-
+    file: ./logs/app.log
+    level: DEBUG
+  name: ZA_limited
   outline:
-    countries: ['ZM', 'ZW', 'MZ'] #['AO', 'BW', 'CD', 'LS', 'MW', 'MZ', 'NM', 'SZ', 'TZ', 'ZA', 'ZM', 'ZW']
+    countries:
+    - ZA
+    data_file_path: ./data/input_data/TEMBA_SSP4-60.xlsx
+    fuel_code_file_path: ./data/fuelcodes(in).csv
+    tech_code_file_path: ./data/techcodes(in).csv
     year: 2030
-    data_file_path: './data/TEMBA_SSP1-26.xlsx'
-    tech_code_file_path: './data/techcodes(in).csv'
-    fuel_code_file_path: './data/fuelcodes(in).csv'
-
-  
+  output_file_path: solutions/SAPP-single-country-limited-technology-2030/problems/ZA_limited_output.xml
