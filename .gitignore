@@ -26,3 +26,5 @@ solutions/*
 
 translation/parsers/retrieve_osemosys_data.ipynb
 .DS_Store
+hamcrest-core-1.3.jar
+junit-4.13.2.jar
