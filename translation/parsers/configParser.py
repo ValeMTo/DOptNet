@@ -15,7 +15,9 @@ class ConfigParserClass:
     def get_file_path(self):
         return self.config['outline']['data_file_path']
     
-        
+    def get_output_file_path(self):
+        return self.config['output_file_path']
+    
     def get_problem_name(self):
         return self.config['name']
     

@@ -16,13 +16,41 @@ class localDataParserClass:
         else:
             raise ValueError("Unit must be 'GW' or 'MW'")
         return data
+    
+
+    def extract_AHA_dataset(self, year):
+        aha_df = pd.read_excel("./data/input_data/African_Hydropower_Atlas_v2-0_PoliTechM.xlsx", sheet_name='6 - Inputs code and GIS')
+        aha_df['Country'] = aha_df['Country'].map(lambda x: x.lower())
+        countrycode_df = pd.read_csv('./data/input_data/countrycode.csv')
+        countrycode_df['Country Name'] = countrycode_df['Country Name'].map(lambda x: x.lower())
+        aha_df = aha_df.merge(countrycode_df, left_on='Country', right_on='Country Name', how='inner')
+        aha_df['COUNTRY'] = aha_df['Country code']
+        
+        aha_df = aha_df[(aha_df['First Year'] <= year) & (aha_df['First Year'] >= year - 100)]
+        aha_df = aha_df[['COUNTRY', 'Capacity', 'Size Type']]
+        aha_df = aha_df.groupby(['COUNTRY', 'Size Type'], as_index=False).agg({'Capacity': 'sum'})
+        
+        aha_df['TECH'] = aha_df['Size Type'].map({'Large': 'HYDMS03X', 'Middle': 'HYDMS02X', 'Small': 'HYDMS01X'})
+
+        if aha_df['TECH'].isna().any():
+            raise ValueError("NaN values found in TECHNOLOGY column")
+        
+        aha_df['Capacity'] = aha_df['Capacity'] / 1000 # GW
+        aha_df['TECHNOLOGY'] = aha_df['COUNTRY'] + aha_df['TECH']
+        aha_df.drop(columns=['Size Type', 'TECH'], inplace=True)
+        return aha_df
 
     def extract_minimum_installed_capacity(self, year, unit='GW'):
+        aha_df = self.extract_AHA_dataset(year)
         residualCapacity_df = pd.read_excel(self.data_file_path, sheet_name="ResidualCapacity")
         residualCapacity_df['COUNTRY'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[:2])
         residualCapacity_df['TECH'] = residualCapacity_df['TECHNOLOGY'].map(lambda x: x[2:])
         new_df = residualCapacity_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'MIN_INSTALLED_CAPACITY'})
         new_df['MIN_INSTALLED_CAPACITY'] = pd.to_numeric(new_df['MIN_INSTALLED_CAPACITY'], errors='coerce')
+
+        new_df = new_df.merge(aha_df, left_on=['COUNTRY', 'TECHNOLOGY'], right_on=['COUNTRY', 'TECHNOLOGY'], how='left')
+        new_df['MIN_INSTALLED_CAPACITY'] = new_df['MIN_INSTALLED_CAPACITY'] + new_df['Capacity'].fillna(0)
+        new_df.drop(columns=['Capacity'], inplace=True)
         
         new_df['MIN_INSTALLED_CAPACITY'] = self.convert_fromGW_capacity_unit(new_df['MIN_INSTALLED_CAPACITY'], unit)
 
@@ -111,36 +139,52 @@ class localDataParserClass:
 
         return new_df
     
-    def extract_capital_costs(self, year):
+    def convert_fromMdollars_cost_unit(self, data, unit):
+        if unit == 'M$':
+            data = data
+        elif unit == 'k$':
+            data = data * 1000
+        elif unit == '$':
+            data = data * 1000000
+        elif unit == 'B$':
+            data = data / 1000
+        else:
+            raise ValueError("Unit must be 'M$', 'k$', or '$'")
+        return data
+    
+    def extract_capital_costs(self, year, unit='M$'):
         capital_costs_df = pd.read_excel(self.data_file_path, sheet_name="CapitalCost")
         capital_costs_df['COUNTRY'] = capital_costs_df['TECHNOLOGY'].map(lambda x: x[:2])
-        capital_costs_df['TECH'] = capital_costs_df['TECHNOLOGY'].map(lambda x: x[2:])
+        capital_costs_df['TECHNOLOGY'] = capital_costs_df['TECHNOLOGY']
 
-        new_df = capital_costs_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'CAPITAL_COST'})
+        new_df = capital_costs_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'CAPITAL_COST'})
         new_df['CAPITAL_COST'] = pd.to_numeric(new_df['CAPITAL_COST'], errors='coerce')
 
+        new_df['CAPITAL_COST'] = self.convert_fromMdollars_cost_unit(new_df['CAPITAL_COST'], unit)
+
         return new_df
     
-    def extract_fixed_costs(self, year):
+    def extract_fixed_costs(self, year, unit='M$'):
         fixed_costs_df = pd.read_excel(self.data_file_path, sheet_name="FixedCost")
         fixed_costs_df['COUNTRY'] = fixed_costs_df['TECHNOLOGY'].map(lambda x: x[:2])
-        fixed_costs_df['TECH'] = fixed_costs_df['TECHNOLOGY'].map(lambda x: x[2:])
+        fixed_costs_df['TECHNOLOGY'] = fixed_costs_df['TECHNOLOGY']
 
-        new_df = fixed_costs_df[['COUNTRY', 'TECH', year]].rename(columns={year: 'FIXED_COST'})
+        new_df = fixed_costs_df[['COUNTRY', 'TECHNOLOGY', year]].rename(columns={year: 'FIXED_COST'})
         new_df['FIXED_COST'] = pd.to_numeric(new_df['FIXED_COST'], errors='coerce')
+
+        new_df['FIXED_COST'] = self.convert_fromMdollars_cost_unit(new_df['FIXED_COST'], unit)
 
         return new_df
     
-    def extract_variable_costs(self, year):
+    def extract_variable_costs(self, year, unit='M$'):
         variable_costs_df = pd.read_excel(self.data_file_path, sheet_name="VariableCost")
         variable_costs_df['COUNTRY'] = variable_costs_df['TECHNOLOGY'].map(lambda x: x[:2])
-        variable_costs_df['TECH'] = variable_costs_df['TECHNOLOGY'].map(lambda x: x[2:])
+        variable_costs_df['TECHNOLOGY'] = variable_costs_df['TECHNOLOGY']
 
-        new_df = variable_costs_df[['COUNTRY', 'TECH','MODEOFOPERATION', year]].rename(columns={year: 'VARIABLE_COST'})
+        new_df = variable_costs_df[['COUNTRY', 'TECHNOLOGY','MODEOFOPERATION', year]].rename(columns={year: 'VARIABLE_COST', 'MODEOFOPERATION': 'MODE_OF_OPERATION'})
         new_df['VARIABLE_COST'] = pd.to_numeric(new_df['VARIABLE_COST'], errors='coerce')
 
-        if len(new_df['MODEOFOPERATION'].unique()) == 1:
-            new_df.drop(columns=['MODEOFOPERATION'], inplace=True)
+        new_df['VARIABLE_COST'] = self.convert_fromMdollars_cost_unit(new_df['VARIABLE_COST'], unit)
 
         return new_df
     
@@ -151,9 +195,9 @@ class localDataParserClass:
     def extract_technology_operational_life(self):
         operational_lifetime_df = pd.read_excel(self.data_file_path, sheet_name="OperationalLife")
         operational_lifetime_df['COUNTRY'] = operational_lifetime_df['TECHNOLOGY'].map(lambda x: x[:2])
-        operational_lifetime_df['TECH'] = operational_lifetime_df['TECHNOLOGY'].map(lambda x: x[2:])
+        operational_lifetime_df['TECHNOLOGY'] = operational_lifetime_df['TECHNOLOGY']
 
-        new_df = operational_lifetime_df[['COUNTRY', 'TECH', 'VALUE']].rename(columns={'VALUE': 'OPERATIONAL_LIFETIME'})
+        new_df = operational_lifetime_df[['COUNTRY', 'TECHNOLOGY', 'VALUE']].rename(columns={'VALUE': 'OPERATIONAL_LIFETIME'})
         new_df['OPERATIONAL_LIFETIME'] = pd.to_numeric(new_df['OPERATIONAL_LIFETIME'], errors='coerce')
 
         return new_df
@@ -207,13 +251,14 @@ class localDataParserClass:
     def extract_emission_activity_ratio(self, year):
         emission_activity_ratio_df = pd.read_excel(self.data_file_path, sheet_name="EmissionActivityRatio")
         emission_activity_ratio_df['COUNTRY_TECH'] = emission_activity_ratio_df['TECHNOLOGY'].map(lambda x: x[:2])
-        emission_activity_ratio_df['TECH'] = emission_activity_ratio_df['TECHNOLOGY'].map(lambda x: x[2:])
+        emission_activity_ratio_df['TECHNOLOGY'] = emission_activity_ratio_df['TECHNOLOGY']
         emission_activity_ratio_df['COUNTRY_EMI'] = emission_activity_ratio_df['EMISSION'].map(lambda x: x[:2])
-        emission_activity_ratio_df['EMISSION'] = emission_activity_ratio_df['EMISSION'].map(lambda x: x[2:])
+        emission_activity_ratio_df['EMISSION'] = emission_activity_ratio_df['EMISSION']
 
+        #TODO: check if it makes sense to filter only the rows where the country of the technology is the same as the country of the emission
         emission_activity_ratio_df = emission_activity_ratio_df[emission_activity_ratio_df['COUNTRY_TECH'] == emission_activity_ratio_df['COUNTRY_EMI']]
 
-        new_df = emission_activity_ratio_df[['COUNTRY_TECH', 'TECH', 'EMISSION', 'MODEOFOPERATION', year]].rename(columns={year: 'EMISSION_ACTIVITY_RATIO'})
+        new_df = emission_activity_ratio_df[['COUNTRY_TECH', 'TECHNOLOGY', 'EMISSION', 'MODEOFOPERATION', year]].rename(columns={year: 'EMISSION_ACTIVITY_RATIO', 'COUNTRY_TECH': 'COUNTRY'})
         new_df['EMISSION_ACTIVITY_RATIO'] = pd.to_numeric(new_df['EMISSION_ACTIVITY_RATIO'], errors='coerce')
 
         return new_df
@@ -231,14 +276,16 @@ class localDataParserClass:
     def extract_annual_emission_limit(self, year):
         annual_emission_limit_df = pd.read_excel(self.data_file_path, sheet_name="AnnualEmissionLimit")
         annual_emission_limit_df['COUNTRY'] = annual_emission_limit_df['EMISSION'].map(lambda x: x[:2])
-        annual_emission_limit_df['EMISSION'] = annual_emission_limit_df['EMISSION'].map(lambda x: x[2:])
+        annual_emission_limit_df['EMISSION'] = annual_emission_limit_df['EMISSION']
 
         new_df = annual_emission_limit_df[['COUNTRY', 'EMISSION', year]].rename(columns={year: 'ANNUAL_EMISSION_LIMIT'})
         new_df['ANNUAL_EMISSION_LIMIT'] = pd.to_numeric(new_df['ANNUAL_EMISSION_LIMIT'], errors='coerce')
 
+        new_df = new_df[(new_df['ANNUAL_EMISSION_LIMIT'] != 999) & (new_df['ANNUAL_EMISSION_LIMIT'] != 0)]
+
         return new_df
     
-    def extract_technologies_per_country(self):
+    def extract_technologies_per_country(self, impose_one_mode=False):
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
         technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
         technologies_df['TECHNOLOGY'] = technologies_df[0]
@@ -249,6 +296,8 @@ class localDataParserClass:
         modeofoperation_df = pd.read_excel(self.data_file_path, sheet_name="MODE_OF_OPERATION", header=None)
         modeofoperation_df['MODE_OF_OPERATION'] = modeofoperation_df[0]
         modeofoperation_df.drop(columns=[0], inplace=True)
+        if impose_one_mode:
+            modeofoperation_df = pd.DataFrame({'MODE_OF_OPERATION': [1]})
 
         expanded_df = technologies_df.loc[technologies_df.index.repeat(len(modeofoperation_df))].reset_index(drop=True)
         expanded_df['MODE_OF_OPERATION'] = modeofoperation_df.iloc[:, 0].values.tolist() * len(technologies_df)
