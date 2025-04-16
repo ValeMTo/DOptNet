@@ -32,4 +32,29 @@ DEOpNet is solved using the Frodo2_ DCOP framework.
    getting-started/Installation
    getting-started/Introduction
 
+.. toctree::
+   :maxdepth: 1
+   :caption: User Guide
+   :hidden:
+
+   user-guide/Model-Structure
+   user-guide/Model-Formulation
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples
+   :hidden:
+
+   examples/Example-1
+   examples/Example-2
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Additional Resources
+   :hidden:
+
+   References
+   Contacts
+   FAQ
+
 **Licence**: Copyright 2025 Valeria Amato --- DEOpNet is licensed under the open source `MIT License <https://github.com/PyPSA/PyPSA/blob/master/LICENSE.txt>`_.
