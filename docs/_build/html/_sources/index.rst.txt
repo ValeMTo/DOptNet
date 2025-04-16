@@ -1,17 +1,35 @@
-.. DOptNet documentation master file, created by
+.. DEOpNet documentation master file, created by
    sphinx-quickstart on Thu Apr 10 17:33:53 2025.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-DOptNet documentation
-=====================
+DEOpNet: Distributed Energy Optimization Network
+===========================================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+**DEOpNet** is a research prototype for distributed energy system planning based on
+**Distributed Constraint Optimization Problems (DCOPs)**. Unlike traditional
+centralized macro-energy models, which assume full cooperation and a single decision-maker,
+DEOpNet reflects the decentralized nature of international energy planning.
 
+Each country is modeled as an autonomous agent, independently optimizing its energy
+production and investment decisions, while coordinating cross-border electricity exchanges
+through structured communication. The model allows for both cooperation and partial
+information sharing — without relying on a central planner.
+
+The model enables more realistic simulations of international energy coordination and
+can evaluate the feasibility of decentralized planning outcomes under varied geopolitical,
+infrastructural, and environmental assumptions.
+
+DEOpNet is solved using the Frodo2_ DCOP framework.
+
+.. _Frodo2: https://frodo-ai.tech/
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 1
+   :caption: Getting Started
+   :hidden:
 
+   getting-started/Introduction
+   getting-started/Installation
+
+**Licence**: Copyright 2025 Valeria Amato --- DEOpNet is licensed under the open source `MIT License <https://github.com/PyPSA/PyPSA/blob/master/LICENSE.txt>`_.
