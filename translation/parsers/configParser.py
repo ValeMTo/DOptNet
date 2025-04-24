@@ -28,11 +28,27 @@ class ConfigParserClass:
         self.logger = logger
         self.logger.info("Logger set in config parser")
 
+    def get_annual_time_resolution(self):
+        """
+        Returns the number of representation per year inside the model.
+        :return: int
+        """
+        self.logger.debug("Annual time resolution set in config parser")
+        return self.config['outline']['representation_per_year']
+    
+    def get_max_iteration(self):
+        """
+        Returns the maximum number of iterations for the model.
+        :return: int
+        """
+        self.logger.debug("Max iteration set in config parser")
+        return self.config['outline']['max_iterations']
+        
     def get_countries(self):
         return self.config['outline']['countries']
     
-    def get_year(self):
-        return self.config['outline']['year']
+    def get_years(self):
+        return self.config['outline']['years']
     
     @deprecated(reason="Data extracted by dataParser class")
     def get_powerplants_data(self):

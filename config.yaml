@@ -6,8 +6,11 @@ config:
   outline:
     countries:
     - ZA
+    years:
+    - 2030
     data_file_path: ./data/input_data/TEMBA_SSP4-60.xlsx
     fuel_code_file_path: ./data/fuelcodes(in).csv
     tech_code_file_path: ./data/techcodes(in).csv
-    year: 2030
+    representation_per_year: 8 # Representations inside an year
+    max_iterations: 30
   output_file_path: solutions/SAPP-single-country-limited-technology-2030/problems/ZA_limited_output.xml

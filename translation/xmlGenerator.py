@@ -46,6 +46,7 @@ class XMLGeneratorClass:
         for name, values in domain_values.items():
             ET.SubElement(domains_element, "domain", {"name": name, "nbValues": str(len(values))}).text = " ".join(map(str, values))
 
+    @deprecated(reason="Time resolution is not anymore fixed")
     def add_variable_from_name(self, technologies, variables, agents):
 
         variables_element = self.instance.find("variables")
@@ -117,6 +118,19 @@ class XMLGeneratorClass:
                     variable_list.append(f"transmission_{agent}_{agent2}")
 
         return variable_list
+    
+    def add_variable(self, name, domain, agent):
+        """Adds a single variable element with name, domain and agent in the XML file."""
+
+        variables_element = self.instance.find("variables")
+        if variables_element is None:
+            variables_element = ET.SubElement(self.instance, "variables")
+
+        ET.SubElement(variables_element, "variable", {
+            "name": name, 
+            "domain": domain, 
+            "agent": agent
+        })
     
     def find_predicates_functions_main_elements(self, type):
         """Finds the main element for predicates or functions."""
