@@ -13,4 +13,5 @@ config:
     tech_code_file_path: ./data/techcodes(in).csv
     representation_per_year: 8 # Representations inside an year
     max_iterations: 30
-  output_file_path: solutions/SAPP-single-country-limited-technology-2030/problems/ZA_limited_output.xml
+    delta_marginal_cost: 0.05
+  output_file_path: solutions/SAPP-single-country-limited-technology-2030

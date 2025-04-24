@@ -43,6 +43,14 @@ class ConfigParserClass:
         """
         self.logger.debug("Max iteration set in config parser")
         return self.config['outline']['max_iterations']
+    
+    def get_delta_marginal_cost(self):
+        """
+        Returns the delta for calculating the marginal cost for the model.
+        :return: float
+        """
+        self.logger.debug("Demand variation set in config parser")
+        return self.config['outline']['delta_marginal_cost']
         
     def get_countries(self):
         return self.config['outline']['countries']
