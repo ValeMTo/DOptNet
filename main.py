@@ -1,4 +1,4 @@
-from translation.energyModel import EnergyModelClass
+from translation.energyAgentModel import EnergyModelClass
 
 if __name__ == "__main__":
     model = EnergyModelClass()
