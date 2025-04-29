@@ -47,10 +47,11 @@ class EnergyModelClass:
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
             self.solve_year(year)
+            self.update_data(year)
         self.logger.info("Energy model solved")
     
     def solve_year(self, year):
-        self.logger.info(f"Solving the energy model for {self.year}")
+        self.logger.info(f"Solving the energy model for {year}")
 
         for t in range(self.time_resolution):
             k = 0
@@ -78,6 +79,9 @@ class EnergyModelClass:
 
     def check_convergence(self):
         raise NotImplementedError("Convergence check not implemented yet")
+    
+    def update_data(self, year):
+        raise NotImplementedError("Data update not implemented yet")
     
     def create_internal_DCOP(self, country, time, year, delta_marginal_cost):
             self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
