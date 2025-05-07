@@ -11,6 +11,7 @@ from tqdm import tqdm
 import numpy as np
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+import xml.etree.ElementTree as ET
 
 class EnergyModelClass:
     def __init__(self):
@@ -29,6 +30,8 @@ class EnergyModelClass:
         self.logger.info("Energy model initialized")
         self.max_iteration = self.config_parser.get_max_iteration()
         self.delta_marginal_cost = self.config_parser.get_delta_marginal_cost()
+        self.marginal_cost_tolerance = self.config_parser.get_marginal_cost_tolerance()
+        self.marginal_costs_df = None
 
     def create_logger(self, log_level, log_file):
         log_dir = os.path.dirname(log_file)
@@ -58,10 +61,13 @@ class EnergyModelClass:
             self.solve_internal_DCOP(t)
             for _ in range(self.max_iteration):
                 self.solve_transmission_problem()
-                self.solve_internal_DCOP(t)
-                if self.check_convergence():
+                marginal_costs_df = self.solve_internal_DCOP(t)
+                if self.check_convergence(marginal_costs_df):
+                    self.logger.info(f"Convergence reached for time {t} and year {year}")
                     break
                 k += 1         
+        if k == self.max_iteration:
+            self.logger.warning(f"Maximum iterations reached for time {t} and year {year}")
 
     def solve_internal_DCOP(self, t, year):
         self.logger.info(f"Calculating marginal costs for time {t} and year {year}")
@@ -69,7 +75,10 @@ class EnergyModelClass:
         for country in self.countries:
             self.create_internal_DCOP(country, t, year)
         output_folder_path = self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{t}"))
-        self.calculate_marginal_costs(t, year, output_folder_path)
+        marginal_costs_df = self.calculate_marginal_costs(t, year, output_folder_path)
+
+        self.logger.info(f"Marginal costs calculated for time {t} and year {year}")
+        return marginal_costs_df
     
     def calculate_marginal_costs(self, t, year, output_folder_path):
         self.logger.info(f"Calculating marginal costs for time {t} and year {year} at {output_folder_path}")
@@ -90,10 +99,14 @@ class EnergyModelClass:
                 demand = file_name.split("_")[1]
                 tree = ET.parse(file_path)
                 root = tree.getroot()
-
                 valuation = root.attrib.get("valuation")
+
                 self.logger.debug(f"Processing file {file_name} with valuation {valuation}")
-                df.at[country, demand] = float(valuation)
+                df.at[country, demand] = int(valuation)
+
+        df['MC_import'] = (df["0"] - df[f"-{self.delta_marginal_cost}"]) / self.delta_marginal_cost
+        df['MC_export'] = (df[f"+{self.delta_marginal_cost}"] - df["0"]) / self.delta_marginal_cost
+        return df
 
     def solve_transmission_problem(self, time):
         raise NotImplementedError("Transmission problem solving not implemented yet")
