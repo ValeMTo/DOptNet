@@ -67,12 +67,33 @@ class EnergyModelClass:
         self.logger.info(f"Calculating marginal costs for time {t} and year {year}")
 
         for country in self.countries:
-            self.create_internal_DCOP(country, t, year, self.delta_marginal_cost)
-        self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{t}"))
-        self.calculate_marginal_costs(t, year)
+            self.create_internal_DCOP(country, t, year)
+        output_folder_path = self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{t}"))
+        self.calculate_marginal_costs(t, year, output_folder_path)
     
-    def calculate_marginal_costs(self, t, year):
-        raise NotImplementedError("Marginal cost calculation not implemented yet")
+    def calculate_marginal_costs(self, t, year, output_folder_path):
+        self.logger.info(f"Calculating marginal costs for time {t} and year {year} at {output_folder_path}")
+        data = {
+            country: {
+            f"-{self.delta_marginal_cost}": None,
+            "0": None,
+            f"+{self.delta_marginal_cost}": None
+            }
+            for country in self.countries
+        }
+        df = pd.DataFrame.from_dict(data, orient='index')
+        
+        for file_name in os.listdir(output_folder_path):
+            if file_name.endswith(".xml"):
+                file_path = os.path.join(output_folder_path, file_name)
+                country = file_name.split("_")[0]
+                demand = file_name.split("_")[1]
+                tree = ET.parse(file_path)
+                root = tree.getroot()
+
+                valuation = root.attrib.get("valuation")
+                self.logger.debug(f"Processing file {file_name} with valuation {valuation}")
+                df.at[country, demand] = float(valuation)
 
     def solve_transmission_problem(self, time):
         raise NotImplementedError("Transmission problem solving not implemented yet")
@@ -83,7 +104,7 @@ class EnergyModelClass:
     def update_data(self, year):
         raise NotImplementedError("Data update not implemented yet")
     
-    def create_internal_DCOP(self, country, time, year, delta_marginal_cost):
+    def create_internal_DCOP(self, country, time, year):
             self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
             if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
                 os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
@@ -145,4 +166,6 @@ class EnergyModelClass:
 
         with ThreadPoolExecutor() as executor:
             executor.map(process_file, os.listdir(problem_folder))
+
+        return output_folder
 
