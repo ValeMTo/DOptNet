@@ -57,15 +57,13 @@ class EnergyModelClass:
         self.logger.info(f"Solving the energy model for {year}")
 
         for t in range(self.time_resolution):
-            k = 0
-            self.solve_internal_DCOP(t)
-            for _ in range(self.max_iteration):
-                self.solve_transmission_problem()
-                marginal_costs_df = self.solve_internal_DCOP(t)
+            marginal_costs_df = self.solve_internal_DCOP(t)
+            for k in range(self.max_iteration):
                 if self.check_convergence(marginal_costs_df):
                     self.logger.info(f"Convergence reached for time {t} and year {year}")
                     break
-                k += 1         
+                self.solve_transmission_problem()
+                marginal_costs_df = self.solve_internal_DCOP(t)
         if k == self.max_iteration:
             self.logger.warning(f"Maximum iterations reached for time {t} and year {year}")
 
@@ -127,26 +125,26 @@ class EnergyModelClass:
         raise NotImplementedError("Data update not implemented yet")
     
     def create_internal_DCOP(self, country, time, year):
-            self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
-            if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
-                os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
+        self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
+        if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
+            os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
 
-            energy_country_class = EnergyAgentClass(
-                country=country,
-                logger=self.logger,
-                data=self.data_parser.get_country_data(country, time, year),
-                output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
-            )
-            energy_country_class.generate_xml(
-                domains=self.data_parser.get_domains(),
-                technologies=self.data_parser.get_technologies(),
-                delta_marginal_cost_percentage=0
-            )
-            energy_country_class.print_xml(f"{country}_0.xml")
-            energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)
-            energy_country_class.print_xml(f"{country}_+{self.delta_marginal_cost}.xml")
-            energy_country_class.change_demand(delta_marginal_cost_percentage=-self.delta_marginal_cost)
-            energy_country_class.print_xml(f"{country}_-{self.delta_marginal_cost}.xml")
+        energy_country_class = EnergyAgentClass(
+            country=country,
+            logger=self.logger,
+            data=self.data_parser.get_country_data(country, time, year),
+            output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
+        )
+        energy_country_class.generate_xml(
+            domains=self.data_parser.get_domains(),
+            technologies=self.data_parser.get_technologies(),
+            delta_marginal_cost_percentage=0
+        )
+        energy_country_class.print_xml(f"{country}_0.xml")
+        energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)
+        energy_country_class.print_xml(f"{country}_+{self.delta_marginal_cost}.xml")
+        energy_country_class.change_demand(delta_marginal_cost_percentage=-self.delta_marginal_cost)
+        energy_country_class.print_xml(f"{country}_-{self.delta_marginal_cost}.xml")
 
     def solve_DCOP(self, input_path, output_path):
         java_command = [
