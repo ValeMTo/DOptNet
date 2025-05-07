@@ -111,8 +111,17 @@ class EnergyModelClass:
     def solve_transmission_problem(self, time):
         raise NotImplementedError("Transmission problem solving not implemented yet")
 
-    def check_convergence(self):
-        raise NotImplementedError("Convergence check not implemented yet")
+    def check_convergence(self, marginal_costs_df):
+        self.logger.info("Checking convergence of marginal costs")
+        if self.marginal_costs_df is None:
+            self.marginal_costs_df = marginal_costs_df
+            return False
+        distance = (self.marginal_costs_df[['MC_import', 'MC_export']] - marginal_costs_df[['MC_import', 'MC_export']]).abs().max().max() 
+        self.logger.debug(f"Maximum Distance between marginal costs: {distance}")
+        if distance < self.marginal_cost_tolerance:
+            return True
+        self.marginal_costs_df = marginal_costs_df
+        return False
     
     def update_data(self, year):
         raise NotImplementedError("Data update not implemented yet")

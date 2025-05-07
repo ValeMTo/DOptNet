@@ -51,6 +51,14 @@ class ConfigParserClass:
         """
         self.logger.debug("Demand variation set in config parser")
         return self.config['outline']['delta_marginal_cost']
+    
+    def get_marginal_cost_tolerance(self):
+        """
+        Returns the tolerance for the marginal cost for the model.
+        :return: float
+        """
+        self.logger.debug("Marginal cost tolerance set in config parser")
+        return self.config['outline']['marginal_cost_tolerance']
         
     def get_countries(self):
         return self.config['outline']['countries']
