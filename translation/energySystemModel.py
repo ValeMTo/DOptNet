@@ -85,25 +85,25 @@ class EnergyModelClass:
     
     def create_internal_DCOP(self, country, time, year, delta_marginal_cost):
             self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
-            if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{time}/problems")):
-                os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{time}/problems"))
+            if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
+                os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
 
             energy_country_class = EnergyAgentClass(
                 country=country,
                 logger=self.logger,
                 data=self.data_parser.get_country_data(country, time, year),
-                output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{time}/problems")
+                output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
             )
             energy_country_class.generate_xml(
                 domains=self.data_parser.get_domains(),
                 technologies=self.data_parser.get_technologies(),
                 delta_marginal_cost_percentage=0
             )
-            energy_country_class.print_xml(f"{country}.xml")
-            energy_country_class.change_demand(delta_marginal_cost_percentage=delta_marginal_cost)
-            energy_country_class.print_xml(f"{country}_+{delta_marginal_cost}.xml")
-            energy_country_class.change_demand(delta_marginal_cost_percentage=-delta_marginal_cost)
-            energy_country_class.print_xml(f"{country}_-{delta_marginal_cost}.xml")
+            energy_country_class.print_xml(f"{country}_0.xml")
+            energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)
+            energy_country_class.print_xml(f"{country}_+{self.delta_marginal_cost}.xml")
+            energy_country_class.change_demand(delta_marginal_cost_percentage=-self.delta_marginal_cost)
+            energy_country_class.print_xml(f"{country}_-{self.delta_marginal_cost}.xml")
 
     def solve_DCOP(self, input_path, output_path):
         java_command = [
