@@ -3,10 +3,11 @@ import subprocess
 import time
 import os
 
-countries = ['ZA',] #['AO', 'BW', 'CD', 'LS', 'MW', 'MZ', 'NM', 'SZ', 'TZ', 'ZA', 'ZM', 'ZW']
+countries = ['ZM'] #'AO', 'BW', 'CD', 'LS', 'MW', 'MZ', 'NM', 'SZ', 'TZ', 'ZM', 'ZW',
 year = 2030
-folder_dir = f'solutions/SAPP-single-country-limited-technology-{year}'
+folder_dir = f'solutions/SAPP-single-country-limited-technology-{year}-ssp5'
 config_file_path = 'config.yaml'
+data_file_path = f'./data/input_data/TEMBA_SSP5-Baseline.xlsx'
 
 problems_dir = os.path.join(folder_dir, 'problems')
 outputs_dir = os.path.join(folder_dir, 'outputs')
@@ -24,6 +25,8 @@ for country in countries:
     config['config']['outline']['countries'] = [country]
     config['config']['output_file_path'] = f'{folder_dir}/problems/{country}_limited_output.xml'
     config['config']['outline']['year'] = year
+    config['config']['outline']['data_file_path'] = data_file_path 
+    print(f"data_file_path: {data_file_path}")
 
     with open(config_file_path, 'w') as file:
         yaml.safe_dump(config, file)
@@ -43,12 +46,12 @@ for country in countries:
     # Step 3: Run the Java Virtual Machine
     java_command = [
         'java', 
-        '-Xmx8G', 
+        '-Xmx2G', 
         '-cp', 
         'frodo2.18.1.jar:junit-4.13.2.jar:hamcrest-core-1.3.jar', 
         'frodo2.algorithms.AgentFactory', 
         '-timeout', 
-        '60000', 
+        '7200000', 
         f'{folder_dir}/problems/{country}_limited_output.xml', 
         'agents/DPOP/DPOPagentJaCoP.xml', 
         '-o', 

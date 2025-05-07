@@ -35,7 +35,7 @@ class localDataParserClass:
         if aha_df['TECH'].isna().any():
             raise ValueError("NaN values found in TECHNOLOGY column")
         
-        aha_df['Capacity'] = aha_df['Capacity'] / 1000 # GW
+        aha_df['Capacity'] = aha_df['Capacity'] / 1000 # I need GW 
         aha_df['TECHNOLOGY'] = aha_df['COUNTRY'] + aha_df['TECH']
         aha_df.drop(columns=['Size Type', 'TECH'], inplace=True)
         return aha_df
@@ -253,7 +253,7 @@ class localDataParserClass:
         emission_activity_ratio_df['COUNTRY_TECH'] = emission_activity_ratio_df['TECHNOLOGY'].map(lambda x: x[:2])
         emission_activity_ratio_df['TECHNOLOGY'] = emission_activity_ratio_df['TECHNOLOGY']
         emission_activity_ratio_df['COUNTRY_EMI'] = emission_activity_ratio_df['EMISSION'].map(lambda x: x[:2])
-        emission_activity_ratio_df['EMISSION'] = emission_activity_ratio_df['EMISSION']
+        emission_activity_ratio_df['EMISSION'] = emission_activity_ratio_df['EMISSION'].map(lambda x: x[2:])
 
         #TODO: check if it makes sense to filter only the rows where the country of the technology is the same as the country of the emission
         emission_activity_ratio_df = emission_activity_ratio_df[emission_activity_ratio_df['COUNTRY_TECH'] == emission_activity_ratio_df['COUNTRY_EMI']]
@@ -276,7 +276,7 @@ class localDataParserClass:
     def extract_annual_emission_limit(self, year):
         annual_emission_limit_df = pd.read_excel(self.data_file_path, sheet_name="AnnualEmissionLimit")
         annual_emission_limit_df['COUNTRY'] = annual_emission_limit_df['EMISSION'].map(lambda x: x[:2])
-        annual_emission_limit_df['EMISSION'] = annual_emission_limit_df['EMISSION']
+        annual_emission_limit_df['EMISSION'] = annual_emission_limit_df['EMISSION'].map(lambda x: x[2:])
 
         new_df = annual_emission_limit_df[['COUNTRY', 'EMISSION', year]].rename(columns={year: 'ANNUAL_EMISSION_LIMIT'})
         new_df['ANNUAL_EMISSION_LIMIT'] = pd.to_numeric(new_df['ANNUAL_EMISSION_LIMIT'], errors='coerce')

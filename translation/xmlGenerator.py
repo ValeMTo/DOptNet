@@ -553,7 +553,7 @@ class XMLGeneratorClass:
             if len(timeslices) * len(modes) > self.max_arity:
                 self.max_arity = len(timeslices) * len(modes)
 
-    # def add_emission_accounting_constraint(self, emission_name, variables, modes, max_emission_limit, emission_factors_df, year_split_df):
+    # def add_ on_accounting_constraint(self, emission_name, variables, modes, max_emission_limit, emission_factors_df, year_split_df):
     #     def build_recursive(timeslices, modes, technologies, emission_factor_df):
     #         if len(timeslices) == 1:
 

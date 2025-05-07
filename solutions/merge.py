@@ -1,8 +1,8 @@
 import os
 import xml.etree.ElementTree as ET
 
-input_folder = "solutions/SAPP-single-country-limited-technology-2030/outputs"
-output_file = "solutions/SAPP-single-country-limited-technology-2030/combined_solution.xml"
+input_folder = "solutions/SAPP-single-country-limited-technology-2030-ssp5/outputs"
+output_file = "solutions/SAPP-single-country-limited-technology-2030-ssp5/combined_solution.xml"
 
 combined_root = ET.Element("solution")
 

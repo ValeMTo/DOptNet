@@ -45,7 +45,7 @@ class EnergyModelClass:
             raise ValueError("Data does not have a 'COUNTRY' column")
         data = data.loc[data['COUNTRY'].isin(self.countries)]
 
-        self.power_tech = ['NGGCP04N', 'NGCCP03N', 'HYDMS03X', 'HYDMS02X', 'HYDMS01X', 'WINDP00X', 'LFRCP01N']#['HYDMS03X', 'HYDMS02X', 'HYDMS01X', 'SOC1P00X', 'BMCHC02N', 'WINDP01X', 'WINDP00X', 'NGGCP04N', 'NGCCP03N', 'LFRCP01N', 'HFGCP02N']
+        self.power_tech = ['HYDMS03X', 'HYDMS02X', 'HYDMS01X', 'WINDP01X', 'WINDP00X', 'BMCHC02N', 'NGGCP04N', 'NGCCP03N', 'LFRCP04O', 'COSCP03O']
         if only_powerplants:
             if 'TECH' in data.columns:
                 data = data.loc[data['TECH'].isin(self.power_tech)]
@@ -189,7 +189,6 @@ class EnergyModelClass:
 
         amortized_capital_costs_df = amortized_capital_costs_df.merge(fixed_costs_df, on=['COUNTRY', 'TECHNOLOGY'], how='left')
 
-
         for index, row in amortized_capital_costs_df.iterrows():
             capacity_variable = f"{row['TECHNOLOGY']}_capacity"
             self.xml_generator.add_installing_cost_minimization_constraint(
@@ -225,6 +224,13 @@ class EnergyModelClass:
         #             cost_per_unit_of_activity=round(row['VARIABLE_COST']), 
         #             year_split_df=year_split_df,
         #         )
+
+        annual_emission_df = self.filter_data(self.data_parser.extract_annual_emission_limit(year=self.year), only_powerplants=False)
+        emission_ratio_df = self.filter_data(self.data_parser.extract_emission_activity_ratio(year=self.year))
+        emission_df = annual_emission_df.merge(emission_ratio_df, on=['COUNTRY', 'EMISSION'], how='left').drop(['MODEOFOPERATION'], axis=1)
+
+        print(emission_df)
+
 
         self.xml_generator.print_xml(output_file=self.config_parser.get_output_file_path())
         self.logger.info("XML generated")
@@ -282,8 +288,8 @@ class EnergyModelClass:
         #TODO: Do not hard code this values
         self.logger.debug("Generating domains...")
         domains = {}
-        domains["rate_activity_domain"] = range(0, 2000000, 5000) #TJ/year
-        domains["installable_capacity_domain"] = range(0, 40000, 500) #MW 
+        domains["rate_activity_domain"] = range(0, 1500000, 1000) #TJ/year
+        domains["installable_capacity_domain"] = range(0, 50000, 100) #MW 
         #domains["trasferable_capacity_domain"] = range(0, 3000, 500) #TJ/year
         return domains
     
