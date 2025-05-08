@@ -2,6 +2,7 @@ from translation.parsers.configParser import ConfigParserClass
 from translation.parsers.osemosysDataParser import localDataParserClass
 from translation.xmlGenerator import XMLGeneratorClass
 from translation.energyAgentModel import EnergyAgentClass
+from translation.transmissionModel import TransmissionModelClass
 from deprecated import deprecated
 import pandas as pd
 import logging
@@ -62,7 +63,7 @@ class EnergyModelClass:
                 if self.check_convergence(marginal_costs_df):
                     self.logger.info(f"Convergence reached for time {t} and year {year}")
                     break
-                self.solve_transmission_problem()
+                self.solve_transmission_problem(t, year)
                 marginal_costs_df = self.solve_internal_DCOP(t)
         if k == self.max_iteration:
             self.logger.warning(f"Maximum iterations reached for time {t} and year {year}")
@@ -106,8 +107,21 @@ class EnergyModelClass:
         df['MC_export'] = (df[f"+{self.delta_marginal_cost}"] - df["0"]) / self.delta_marginal_cost
         return df
 
-    def solve_transmission_problem(self, time):
-        raise NotImplementedError("Transmission problem solving not implemented yet")
+    def solve_transmission_problem(self, time, year):
+        self.logger.info(f"Solving transmission problem for time {time}")
+
+        transmission_solver = TransmissionModelClass(
+            countries=self.countries,
+            data=self.data_parser.get_transmission_data(time, year),
+            logger=self.logger,
+            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/problems")
+        )
+
+        transmission_solver.generate_xml()
+        transmission_solver.print_xml(
+            name=f"transmission_problem_{time}.xml",
+            output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/outputs")
+        )
 
     def check_convergence(self, marginal_costs_df):
         self.logger.info("Checking convergence of marginal costs")
@@ -137,7 +151,6 @@ class EnergyModelClass:
         )
         energy_country_class.generate_xml(
             domains=self.data_parser.get_domains(),
-            technologies=self.data_parser.get_technologies(),
             delta_marginal_cost_percentage=0
         )
         energy_country_class.print_xml(f"{country}_0.xml")
