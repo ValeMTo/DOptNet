@@ -8,15 +8,15 @@ import os
 from itertools import product
 
 class EnergyAgentClass:
-    def __init__(self, country, logger, data, output_file_path):
+    def __init__(self, country, logger, data, xml_file_path):
         self.name = country
         self.logger = logger
         self.data = data
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
         self.logger.debug(f"EnergyAgentClass initialized for {country}")
-        self.output_file_path = output_file_path
+        self.xml_file_path = xml_file_path
     
-    def generate_xml(self, domains, technologies):
+    def generate_xml(self, domains):
         self.logger.debug(f"Generating XML for {self.name}")
         
         self.xml_generator.add_presentation(name=self.name, maximize='False')
@@ -33,8 +33,8 @@ class EnergyAgentClass:
 
     def print_xml(self, name):
         self.logger.debug(f"Printing XML for {self.name}")
-        self.xml_generator.print_xml(output_file=os.path.join(self.output_file_path, name))
-        self.logger.debug(f"XML generated for {self.name} at {os.path.join(self.output_file_path, name)}")
+        self.xml_generator.print_xml(output_file=os.path.join(self.xml_file_path, name))
+        self.logger.debug(f"XML generated for {self.name} at {os.path.join(self.xml_file_path, name)}")
     
     def change_demand(self, demand_variation_percentage):
         self.logger.debug(f"Changing demand for {self.name} by {demand_variation_percentage}%")
