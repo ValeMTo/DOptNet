@@ -8,19 +8,67 @@ import os
 from itertools import product
 
 class TransmissionModelClass:
-    def __init__(self, countries, data, logger, xml_file_path):
+    def __init__(self, countries, neighbor_pairs, data, logger, xml_file_path, expansion_enabled):
         self.countries = countries
+        self.neighbor_pairs = neighbor_pairs
         self.data = data
         self.logger = logger
         self.xml_file_path = xml_file_path
         self.xml_generator = XMLGeneratorClass(logger=self.logger)
-
+        self.expansion_enabled = expansion_enabled
    
     def generate_xml(self):
-        raise NotImplementedError("generate_xml method not implemented yet")
+        self.logger.debug("Generating XML for transmission model")
+
+        self.xml_generator.add_presentation(name="TransmissionModel", maximize='False')
+        self.xml_generator.add_agents(self.countries)
+        self.xml_generator.add_domains(self.generate_domains())
+
+        for n in self.neighbor_pairs:
+            self.xml_generator.add_variable(name=f"transmission_{n[0]}_{n[1]}", domain='capacity_domain', agent=n[0])
+            self.xml_generator.add_variable(name=f"transmission_{n[1]}_{n[0]}", domain='capacity_domain', agent=n[1])
+            self.xml_generator.add_symmetry_constraints(
+                name=f"symmetry_{n[0]}_{n[1]}",
+                var1=f"transmission_{n[0]}_{n[1]}",
+                var2=f"transmission_{n[1]}_{n[0]}"
+            )
+        
+        # Constraint: Transmission capacity should be less than or equal to the maximum capacity
+        for n in self.neighbor_pairs:
+            self.xml_generator.add_maximum_capacity_constraint(
+                variable_name=f"transmission_{n[0]}_{n[1]}",
+                max_capacity=self.data.get_max_capacity(n[0], n[1])
+            )
+            self.xml_generator.add_maximum_capacity_constraint(
+                variable_name=f"transmission_{n[1]}_{n[0]}",
+                max_capacity=self.data.get_max_capacity(n[0], n[1])
+            )
+
+        # Constraint: Power balance per country
+        for country in self.countries:
+            countries_to_export = [f"transmission_{n[0]}_{n[1]}" for n in self.neighbor_pairs if n[0] == country]
+            countries_to_import = [f"transmission_{n[0]}_{n[1]}" for n in self.neighbor_pairs if n[1] == country]
+            self.xml_generator.add_power_balance_constraint(
+                name = f"power_balance_{country}",
+                export_flow_variables = countries_to_export,
+                import_flow_variables = countries_to_import,
+                demand=self.data.get_marginal_demand(country)
+            )
+
+        # Constraint: Utility function
+        for n in self.neighbor_pairs:
+            self.xml_generator.add_utility_function(
+                name=f"utility_{n[0]}_{n[1]}",
+                variable=f"transmission_{n[0]}_{n[1]}",
+                import_marginal_cost = self.data.get_import_marginal_cost(n[0]),
+                export_marginal_cost = self.data.get_export_marginal_cost(n[1]),
+                cost_unit_transmission_line = self.data.get_cost_unit_transmission_line(n[0], n[1]),
+            )
     
     def print_xml(self, name):
         self.logger.debug(f"Printing XML for {self.name}")
         self.xml_generator.print_xml(output_file=os.path.join(self.xml_file_path, name))
         self.logger.debug(f"XML generated for {self.name} at {os.path.join(self.xml_file_path, name)}")
     
+    def generate_domains(self):
+        raise NotImplementedError("This method has not been implemented yet")
