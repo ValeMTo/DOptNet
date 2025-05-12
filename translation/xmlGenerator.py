@@ -9,6 +9,9 @@ class XMLGeneratorClass:
 
         self.instance = self.create_frodo2_xml_head_instance()
 
+        self.functions = {}
+        self.predicates = {}
+
         self.max_arity = 1
 
     def create_frodo2_xml_head_instance(self):
@@ -132,25 +135,11 @@ class XMLGeneratorClass:
             "agent": agent
         })
     
-    def find_predicates_functions_main_elements(self, type):
-        """Finds the main element for predicates or functions."""
+    def add_predicate(self, name, parameters, functional):
+        """Adds a single predicate element with parameters and functional expression."""
         predicates_element = self.instance.find("predicates")
         if (predicates_element is None):
             predicates_element = ET.SubElement(self.instance, "predicates")
-        functions_element = self.instance.find("functions")
-        if (functions_element is None):
-            functions_element = ET.SubElement(self.instance, "functions")
-
-        if type == "predicates":
-            return predicates_element
-        elif type == "functions":
-            return functions_element
-        else:
-            raise ValueError("Type must be either 'predicates' or 'functions'")
-    
-    def add_predicate(self, name, parameters, functional):
-        """Adds a single predicate element with parameters and functional expression."""
-        predicates_element = self.find_predicates_functions_main_elements('predicates')
         
         predicate_element = ET.SubElement(predicates_element, "predicate", {"name": name})
         ET.SubElement(predicate_element, "parameters").text = parameters
@@ -159,48 +148,41 @@ class XMLGeneratorClass:
 
     def add_function(self, name, parameters, functional):
         """Adds a single function element with parameters and functional expression."""
-        functions_element = self.find_predicates_functions_main_elements('functions')
+        functions_element = self.instance.find("functions")
+        if (functions_element is None):
+            functions_element = ET.SubElement(self.instance, "functions")
         
         functions_element = ET.SubElement(functions_element, "function", {"name": name, "return": "int"})
         ET.SubElement(functions_element, "parameters").text = parameters
         expression_element = ET.SubElement(functions_element, "expression")
         ET.SubElement(expression_element, "functional").text = functional
+        self.functions[name] = 1
 
     def add_constraint(self, name, arity, scope, reference, parameters):
         """Adds a single constraint element with arity, scope and reference."""
+
         constraints_element = self.instance.find("constraints")
         if (constraints_element is None):
             constraints_element = ET.SubElement(self.instance, "constraints")
         
         constraint_element = ET.SubElement(constraints_element, "constraint", {"name": name, "arity": str(arity), "scope": scope, "reference": reference})
         ET.SubElement(constraint_element, "parameters").text = parameters
+        self.predicates[reference] = 1
 
         if arity > self.max_arity:
             self.max_arity = int(arity)
 
     def find_predicate(self, name):
         """Finds a predicate element by name."""
-        predicates_element = self.instance.find("predicates")
-        if predicates_element is None:
-            predicates_element = ET.SubElement(self.instance, "predicates")
-            return False
-        else:
-            for predicate in predicates_element.findall("predicate"):
-                if predicate.attrib["name"] == name:
-                    return True
-            return False
+        if self.predicates.get(name):
+            return True
+        return False
         
     def find_function(self, name):
         """Finds a function element by name."""
-        functions_element = self.instance.find("functions")
-        if functions_element is None:
-            functions_element = ET.SubElement(self.instance, "functions")
-            return False
-        else:
-            for function in functions_element.findall("function"):
-                if function.attrib["name"] == name:
-                    return True
-            return False
+        if self.functions.get(name):
+            return True
+        return False
 
     def add_minimum_capacity_constraint(self, variable_name, min_capacity):
         """Adds an hard constraint to the XML instance that enforces minimum installed capacity."""
