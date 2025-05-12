@@ -904,8 +904,79 @@ class XMLGeneratorClass:
 
         if len(rateActivity_variables) > self.max_arity:
             self.max_arity = len(rateActivity_variables)
-        
     
+    def add_symmetry_constraint(self, extra_name, var1, var2):
+        """
+        Adds a symmetry constraint to the XML instance.
+        The symmetry constraint ensures that var1 = -var2.
+        """
+        
+        if not self.find_predicate("symmetry"):
+            self.add_predicate(
+                name="symmetry", 
+                parameters="int var1 int var2",
+                functional=boolean_eq(var1, neg(var2))
+            )
+
+        self.add_constraint(
+            name=f"symmetry_{extra_name}",
+            arity=2,
+            scope=f"{var1} {var2}",
+            reference="symmetry",
+            parameters=f"{var1} {var2}"
+        )
+
+        if self.max_arity < 2:
+            self.max_arity = 2
+
+    def add_power_balance_constraint(self, extra_name, flow_variables, delta):
+        """
+        Adds a power balance constraint to the XML instance.
+        The power balance constraint ensures that the sum of import flows minus 
+        the sum of export flows equals plus delta.
+        """
+        def build_recursive_add_expression(vars):
+            if len(vars) == 2:
+                return add(abs_val(vars[0]), abs_val(vars[1]))
+            return add(abs_val(vars[0]), build_recursive_add_expression(vars[1:]))
+
+        num = len(flow_variables)
+        if not isinstance(delta, int):
+            raise ValueError("delta must be an integer")
+
+        if not self.find_predicate(f"powerBalance_{num}"):
+            self.add_predicate(
+                name=f"powerBalance_{num}", 
+                parameters=" ".join([f"int var_{i}" for i in range(num)]) + " int delta",
+                functional=boolean_le(build_recursive_add_expression([f"var_{i}" for i in range(num)]), "delta")
+            )
+        self.add_constraint(
+            name=f"powerBalance_{num}_{extra_name}",
+            arity=num,
+            scope=f"{' '.join(flow_variables)}",
+            reference=f"powerBalance_{num}",
+            parameters=f"{' '.join(flow_variables)} {delta}"
+        )
+        
+    def add_utility_function_constaint(self, extra_name, variable, import_marginal_cost, export_marginal_cost, cost):
+        if not isinstance(import_marginal_cost, int) or not isinstance(export_marginal_cost, int) or not isinstance(cost, int):
+            raise ValueError("import_marginal_cost, export_marginal_cost and cost must be integers")
+
+        if not self.find_predicate(f"utilityFunction"):
+            self.add_function(
+                name=f"maximise_utilityFunction", 
+                parameters="int transmission_line int import_marginal_cost int export_marginal_cost int cost",
+                functional=sub(mul("transmission_line", sub("import_marginal_cost", "export_marginal_cost")), "cost")
+            )
+
+        self.add_constraint(
+            name=f"utilityFunction_{extra_name}",
+            arity=1,
+            scope=f"{variable}",
+            reference=f"utilityFunction_{extra_name}",
+            parameters=f"{variable} {import_marginal_cost} {export_marginal_cost} {cost}"
+        )
+
     def print_xml(self, output_file = "defaultName_problem.xml"):
         """Prints the XML instance to a file."""
         self.set_max_arity_contraints()
