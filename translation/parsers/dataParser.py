@@ -1,4 +1,5 @@
 import pandas as pd
+from translation.retriever.transmissionRetriever import transmissionRetrieverClass
 
 class dataParserClass:
     def __init__(self, logger):
@@ -11,6 +12,9 @@ class dataParserClass:
         """
         raise NotImplementedError("This method will be implemented in child classes")
     
-    def get_transmission_data(self, time, year):
-        raise NotImplementedError("This method will be implemented in child classes")
+    def get_transmission_data(self, regions):
+        retriever = transmissionRetrieverClass(self.logger, regions)
+        return retriever.extract_cross_border_lines(regions)
+
+
     

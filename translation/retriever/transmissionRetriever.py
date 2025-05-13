@@ -4,10 +4,9 @@ from shapely.geometry import Point
 import pandas as pd
 
 class transmissionRetrieverClass():
-    def __init__(self, logger, regions, phase):
+    def __init__(self, logger, regions):
         self.logger = logger
         self.regions = regions
-        self.coefficient_phase = phase
 
     def get_power_lines(self):
         tags = {"power": "line", "voltage": True}
@@ -45,16 +44,15 @@ class transmissionRetrieverClass():
                 self.logger.info(f"Found {len(cross_border_lines)} cross-border lines")
                 tension = line.get('voltage', None)
                 circuit = line.get('circuit', None)
+                cables = line.get('cables', None)
                 cross_border_lines.append({
                     "start_country": start_country,
                     "end_country": end_country,
                     "tension": tension,
-                    "circuit": circuit #TODO: it might be also the number of cables
+                    "circuit": circuit, #TODO: it might be also the number of cables
+                    "cables": cables,
                 })
         df = pd.DataFrame(cross_border_lines)
         self.logger.info(f"Extracted {len(df)} cross-border lines")
 
-        df['capacity'] = df['tension'] * df['circuit'] * self.coefficient_phase
-        df = df.groupby(['start_country', 'end_country'], as_index=False).agg({'capacity': 'sum'})
-        #TODO: how to handle 'end_country', 'start_country' pair? Does the order matter?
         return df
