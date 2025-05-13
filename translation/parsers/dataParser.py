@@ -12,9 +12,23 @@ class dataParserClass:
         """
         raise NotImplementedError("This method will be implemented in child classes")
     
-    def get_transmission_data(self, regions):
+    def get_transmission_data(self, regions, cross_border_only=True):
+        """
+        Returns the transmission data for the specified regions.
+        It returns a dataframe with the following columns:
+        - start_country
+        - end_country
+        - tension
+        - circuit
+        - cables
+        that are the data from Open Street Map. No assumptions are made.
+        The dataframe is filtered to only include cross-border lines if cross_border_only is True.
+        """
         retriever = transmissionRetrieverClass(self.logger, regions)
-        return retriever.extract_cross_border_lines(regions)
+        if cross_border_only:
+            self.logger.info("Filtering cross-border lines")
+            return retriever.extract_cross_border_lines(regions, cross_border_only=cross_border_only)
+        raise NotImplementedError("The method without cross-border lines is not implemented yet")
 
 
     
