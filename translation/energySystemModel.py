@@ -50,6 +50,7 @@ class EnergyModelClass:
     def solve(self):
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
+            self.data_parser.load_data(year)
             self.solve_year(year)
             self.update_data(year)
         self.logger.info("Energy model solved")
@@ -112,7 +113,7 @@ class EnergyModelClass:
 
         transmission_solver = TransmissionModelClass(
             countries=self.countries,
-            data=self.data_parser.get_transmission_data(time, year),
+            data=self.data_parser.get_transmission_data(self.countries),
             logger=self.logger,
             xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/problems")
         )

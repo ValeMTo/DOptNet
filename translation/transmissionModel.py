@@ -60,14 +60,14 @@ class TransmissionModelClass:
                 variable=f"transmission_{n[0]}_{n[1]}",
                 import_marginal_cost = self.data.get_import_marginal_cost(n[1]),
                 export_marginal_cost = self.data.get_export_marginal_cost(n[0]),
-                cost_unit_transmission_line = self.data.get_cost_unit_transmission_line(n[0], n[1]),
+                cost_unit_transmission_line = self.data.get_cost_unit_transmission_line(origin=n[0], destination=n[1]),
             )
             self.xml_generator.add_utility_function_constaint(
                 extra_name=f"{n[1]}_{n[0]}",
                 variable=f"transmission_{n[1]}_{n[0]}",
                 import_marginal_cost = self.data.get_import_marginal_cost(n[0]),
                 export_marginal_cost = self.data.get_export_marginal_cost(n[1]),
-                cost = self.data.get_cost_unit_transmission_line(n[1], n[0]),
+                cost = self.data.get_cost_unit_transmission_line(origin=n[1], destination=n[0]),
             )
     
     def print_xml(self, name):
