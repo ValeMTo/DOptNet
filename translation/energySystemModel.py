@@ -1,5 +1,5 @@
 from translation.parsers.configParser import ConfigParserClass
-from translation.parsers.osemosysDataParser import localDataParserClass
+from translation.parsers.osemosysDataParser import osemosysDataParserClass
 from translation.xmlGenerator import XMLGeneratorClass
 from translation.energyAgentModel import EnergyAgentClass
 from translation.transmissionModel import TransmissionModelClass
@@ -20,7 +20,7 @@ class EnergyModelClass:
         self.logger = self.create_logger(**self.config_parser.get_log_info())
         self.config_parser.set_logger(self.logger)
 
-        self.data_parser = localDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
+        self.data_parser = osemosysDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
 
         self.name = self.config_parser.get_problem_name()
@@ -146,12 +146,12 @@ class EnergyModelClass:
         energy_country_class = EnergyAgentClass(
             country=country,
             logger=self.logger,
-            data=self.data_parser.get_country_data(country, time, year),
+            data=self.data_parser.get_country_data(country, time),
             output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
         )
         energy_country_class.generate_xml(
             domains=self.data_parser.get_domains(),
-            delta_marginal_cost_percentage=0
+            delta_marginal_cost_percentage=self.delta_marginal_cost,
         )
         energy_country_class.print_xml(f"{country}_0.xml")
         energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)

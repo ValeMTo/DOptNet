@@ -1,12 +1,14 @@
 import pandas as pd
-
-class localDataParserClass:
-    def __init__(self, logger, file_path, ): #tech_path, fuel_path):
+from translation.parsers.dataParser import dataParserClass
+class osemosysDataParserClass(dataParserClass):
+    def __init__(self, logger, file_path): #tech_path, fuel_path):
         self.logger = logger
         self.logger.info("Local Data parser initialized")
         self.data_file_path = file_path
         #self.tech_file_path = tech_path
         #self.fuel_file_path = fuel_path
+
+        self.dfs = {} 
 
     def convert_fromGW_capacity_unit(self, data, unit):
         if unit == 'GW':
@@ -17,6 +19,58 @@ class localDataParserClass:
             raise ValueError("Unit must be 'GW' or 'MW'")
         return data
     
+    def load_data(self, year):
+        self.logger.debug("Loading data from Excel file")
+        
+        self.dfs['minimum_installed_capacity'] = self.extract_minimum_installed_capacity(year=year)
+        self.dfs['capacity_factors'] = self.extract_capacity_factors(year=year, timeslices=True)
+        self.dfs['availability_factors'] = self.extract_availability_factors(year=year)
+        self.dfs['capacity_to_activity_unit'] = self.extract_capacity_to_activity_unit()
+        #self.dfs['specified_annual_demand'] = self.extract_specified_annual_demand(year=year)
+        #self.dfs['specified_demand_profile'] = self.extract_specified_demand_profile(year=year, timeslices=True)
+        #self.dfs['year_split'] = self.extract_year_split(year=year)
+        #self.dfs['accumulated_annual_demand'] = self.extract_accumulated_annual_demand(year=year) #Fuel only
+        self.dfs['capital_costs'] = self.extract_capital_costs(year=year)
+        self.dfs['fixed_costs'] = self.extract_fixed_costs(year=year)
+        self.dfs['variable_costs'] = self.extract_variable_costs(year=year)
+        self.dfs['discount_rate'] = self.extract_discount_rate()
+        self.dfs['operational_lifetime'] = self.extract_technology_operational_life()
+        self.dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year)
+        self.dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year)
+        self.dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year)
+        self.dfs['emission_activity_ratio'] = self.extract_emission_activity_ratio(year=year)
+        self.dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
+        self.dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
+        self.dfs['output_activity_ratio'] = self.extract_output_activity_ratio(year=year)
+        self.dfs['input_activity_ratio'] = self.extract_input_activity_ratio(year=year)
+
+        self.logger.debug("Data loaded successfully for year %s", year)
+
+    def get_country_data(self, country, time):
+        self.logger.debug("Getting data for %s in %s", country, time)
+
+        country_data = {}
+        for key, df in self.dfs.items():
+            if 'COUNTRY' in df.columns:
+                filtered_df = df[df['COUNTRY'] == country]
+            if 'TIMESLICE' in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df['TIMESLICE'] == time]
+                country_data[key] = filtered_df
+            else:
+                country_data[key] = df  # Include unfiltered data if 'COUNTRY' is not a column
+            self.logger.debug("Data for %s: %s", key, country_data[key].head())
+
+        technologies_df = self.extract_technologies_per_country()
+        pivoted_data = technologies_df[['TECHNOLOGY']].drop_duplicates().set_index('TECHNOLOGY')
+
+        for key, df in country_data.items():
+            if 'TECHNOLOGY' in df.columns:
+                df = df[['TECHNOLOGY']].drop_duplicates()
+                df[key] = country_data[key].set_index('TECHNOLOGY').reindex(pivoted_data.index)[key]
+            else:
+                raise ValueError(f"Key {key} does not contain 'TECHNOLOGY' column")
+        country_data = pivoted_data.join(pd.concat([df for df in country_data.values()], axis=1))
+        return country_data
 
     def extract_AHA_dataset(self, year):
         aha_df = pd.read_excel("./data/input_data/African_Hydropower_Atlas_v2-0_PoliTechM.xlsx", sheet_name='6 - Inputs code and GIS')
@@ -285,30 +339,16 @@ class localDataParserClass:
 
         return new_df
     
-    def extract_technologies_per_country(self, impose_one_mode=False):
+    def extract_technologies_per_country(self, country):
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
         technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
-        technologies_df['TECHNOLOGY'] = technologies_df[0]
-        technologies_df.drop(columns=[0], inplace=True)
-        timeslice_df = pd.read_excel(self.data_file_path, sheet_name="TIMESLICE", header=None)
-        timeslice_df['TIMESLICE'] = timeslice_df[0]
-        timeslice_df.drop(columns=[0], inplace=True)
-        modeofoperation_df = pd.read_excel(self.data_file_path, sheet_name="MODE_OF_OPERATION", header=None)
-        modeofoperation_df['MODE_OF_OPERATION'] = modeofoperation_df[0]
-        modeofoperation_df.drop(columns=[0], inplace=True)
-        if impose_one_mode:
-            modeofoperation_df = pd.DataFrame({'MODE_OF_OPERATION': [1]})
+        technologies_df['TECHNOLOGY'] = technologies_df[0].map(lambda x: x[2:])
+  
+        technologies_df = technologies_df[['COUNTRY', 'TECHNOLOGY']]
+        technologies_df = technologies_df[technologies_df['COUNTRY'] == country]
 
-        expanded_df = technologies_df.loc[technologies_df.index.repeat(len(modeofoperation_df))].reset_index(drop=True)
-        expanded_df['MODE_OF_OPERATION'] = modeofoperation_df.iloc[:, 0].values.tolist() * len(technologies_df)
-
-        completely_expanded_df = expanded_df.loc[expanded_df.index.repeat(len(timeslice_df))].reset_index(drop=True)
-        completely_expanded_df['TIMESLICE'] = timeslice_df.iloc[:, 0].values.tolist() * len(expanded_df)
-
-        completely_expanded_df['VARIABLE'] = completely_expanded_df['TIMESLICE'] + '_' + completely_expanded_df['TECHNOLOGY'] + '_' + completely_expanded_df['MODE_OF_OPERATION'].map(str)
-
-        return completely_expanded_df[['COUNTRY', 'TECHNOLOGY', 'VARIABLE', 'MODE_OF_OPERATION']]
-
+        return technologies_df
+    
     def extract_output_activity_ratio(self, year):
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="OutputActivityRatio")
         technologies_df['COUNTRY'] = technologies_df['TECHNOLOGY'].map(lambda x: x[:2])
