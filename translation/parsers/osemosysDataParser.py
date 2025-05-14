@@ -1,5 +1,6 @@
 import pandas as pd
 from translation.parsers.dataParser import dataParserClass
+from deprecated import deprecated
 class osemosysDataParserClass(dataParserClass):
     def __init__(self, logger, file_path): #tech_path, fuel_path):
         self.logger = logger
@@ -19,6 +20,16 @@ class osemosysDataParserClass(dataParserClass):
             raise ValueError("Unit must be 'GW' or 'MW'")
         return data
     
+    def load_demand(self, year, country, timeslice):
+        self.logger.debug("Loading demand data")
+        specified_annual_demand_df = self.extract_specified_annual_demand(year=year)
+        specified_demand_profile_df = self.extract_specified_demand_profile(year=year, timeslices=True)
+        demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
+        demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
+        specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0]
+
+        return specified_demand
+    
     def load_data(self, year):
         self.logger.debug("Loading data from Excel file")
         
@@ -33,14 +44,14 @@ class osemosysDataParserClass(dataParserClass):
         self.dfs['capital_costs'] = self.extract_capital_costs(year=year)
         self.dfs['fixed_costs'] = self.extract_fixed_costs(year=year)
         self.dfs['variable_costs'] = self.extract_variable_costs(year=year)
-        self.dfs['discount_rate'] = self.extract_discount_rate()
+        #self.dfs['discount_rate'] = self.extract_discount_rate()
         self.dfs['operational_lifetime'] = self.extract_technology_operational_life()
         self.dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year)
         self.dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year)
         self.dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year)
         self.dfs['emission_activity_ratio'] = self.extract_emission_activity_ratio(year=year)
-        self.dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
-        self.dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
+        #self.dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
+        #self.dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
         self.dfs['output_activity_ratio'] = self.extract_output_activity_ratio(year=year)
         self.dfs['input_activity_ratio'] = self.extract_input_activity_ratio(year=year)
 
@@ -60,22 +71,22 @@ class osemosysDataParserClass(dataParserClass):
                 country_data[key] = df  # Include unfiltered data if 'COUNTRY' is not a column
             self.logger.debug("Data for %s: %s", key, country_data[key].head())
 
-        technologies_df = self.extract_technologies_per_country()
+        technologies_df = self.extract_technologies_per_country(country)
         pivoted_data = technologies_df[['TECHNOLOGY']].drop_duplicates().set_index('TECHNOLOGY')
 
         for key, df in country_data.items():
             if 'TECHNOLOGY' in df.columns:
-                df = df[['TECHNOLOGY']].drop_duplicates()
-                df[key] = country_data[key].set_index('TECHNOLOGY').reindex(pivoted_data.index)[key]
+                country_data[key] = df.set_index('TECHNOLOGY')
             else:
                 raise ValueError(f"Key {key} does not contain 'TECHNOLOGY' column")
-        country_data = pivoted_data.join(pd.concat([df for df in country_data.values()], axis=1))
+        merged_df = pd.concat([df for df in country_data.values()])
+        country_data = pivoted_data.merge(merged_df, left_index=True, right_index=True, how='left')
         return country_data
 
     def extract_AHA_dataset(self, year):
-        aha_df = pd.read_excel("./data/input_data/African_Hydropower_Atlas_v2-0_PoliTechM.xlsx", sheet_name='6 - Inputs code and GIS')
+        aha_df = pd.read_excel("./osemosys_data/input_data/African_Hydropower_Atlas_v2-0_PoliTechM.xlsx", sheet_name='6 - Inputs code and GIS')
         aha_df['Country'] = aha_df['Country'].map(lambda x: x.lower())
-        countrycode_df = pd.read_csv('./data/input_data/countrycode.csv')
+        countrycode_df = pd.read_csv('./osemosys_data/input_data/countrycode.csv')
         countrycode_df['Country Name'] = countrycode_df['Country Name'].map(lambda x: x.lower())
         aha_df = aha_df.merge(countrycode_df, left_on='Country', right_on='Country Name', how='inner')
         aha_df['COUNTRY'] = aha_df['Country code']
@@ -339,13 +350,24 @@ class osemosysDataParserClass(dataParserClass):
 
         return new_df
     
+    @deprecated
     def extract_technologies_per_country(self, country):
+        print("Deprecated: Use extract_technologies_per_country instead")
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
         technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
-        technologies_df['TECHNOLOGY'] = technologies_df[0].map(lambda x: x[2:])
+        technologies_df['TECHNOLOGY'] = technologies_df[0]
   
-        technologies_df = technologies_df[['COUNTRY', 'TECHNOLOGY']]
         technologies_df = technologies_df[technologies_df['COUNTRY'] == country]
+        technologies_df = technologies_df[['TECHNOLOGY']]
+
+        return technologies_df
+    
+    def extract_technologies_per_country(self, country):
+        technologies_df = pd.read_csv("./osemosys_data/techcodes(in).csv")
+        technologies_df = technologies_df[technologies_df['Group'] == 'Power_plants']
+        technologies_df = technologies_df[['code (Old)']].rename(columns={'code (Old)': 'TECHNOLOGY'})
+        technologies_df['COUNTRY'] = country
+        technologies_df['TECHNOLOGY'] = technologies_df['COUNTRY'] + technologies_df['TECHNOLOGY']
 
         return technologies_df
     
