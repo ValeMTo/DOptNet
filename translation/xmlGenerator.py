@@ -226,8 +226,35 @@ class XMLGeneratorClass:
             parameters=f"{variable_name} {str(max_capacity)}"
         )
 
-    #TODO: to implement again - quick wrap up
-    def add_minimum_respecting_demand(self, timeslice_technologies_modes, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
+    def add_minimum_demand_constraint(self, variables, demand, extra_name):
+        """Adds an hard constraint to the XML instance that enforces minimum demand."""
+        def build_recursive(variables):
+            if len(variables) == 1:
+                return variables[0]
+            return add(variables[0], build_recursive(variables[1:]))
+        
+        if not isinstance(demand, int):
+            raise ValueError("demand must be an integer")
+        
+        if not self.find_predicate("minimumDemand"):
+            self.add_predicate(
+                name="minimumDemand", 
+                parameters="int demand int " + " int ".join(variables), 
+                functional=boolean_ge(build_recursive(variables), "demand")
+            )
+        
+        self.add_constraint(
+            name=f"minimumDemand_{extra_name}", 
+            arity=len(variables), 
+            scope=" ".join(variables),
+            reference="minimumDemand",
+            parameters=f"{demand} {' '.join(variables)}"
+        )
+
+        return f"minimumDemand_constraint"
+
+    @deprecated
+    def add_minimum_respecting_demand_df(self, timeslice_technologies_modes, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
         def build_recursive(variables):
             if len(variables) == 1:
                 return variables[0]
@@ -347,6 +374,7 @@ class XMLGeneratorClass:
                             reference=f"minimumRateOfActivity_{f}",
                             parameters=f"{' '.join(rateOfActivity_variables)} {' '.join(weights)} {specified_demand}"
                         )
+    @deprecated
     def add_maximum_annual_activity_rate_per_timeslice_constraint(self, modes, factors_df):
         
         if not self.find_predicate("maximumAnnualRateActivityPerTimeslice"):
@@ -388,7 +416,23 @@ class XMLGeneratorClass:
                         )
                     else:
                         raise ValueError("The factor should be positive")
-
+                    
+    def add_maximum_activity_rate_constraint(self, cap_variable, capActivity_variable, factor):
+        """Adds an hard constraint to the XML instance that enforces maximum rate fo activity."""
+        if not self.find_predicate("maximumRateActivity"):
+            self.add_predicate(
+                name="maximumRateActivity", 
+                parameters="int rateActivity int capacity int factor", 
+                functional=boolean_le("rateActivity", mul("capacity", "factor"))
+            )
+        self.add_constraint(
+            name=f"maximumRateActivity_{cap_variable.split('_')[0]}", 
+            arity=2, 
+            scope=f"{cap_variable} {capActivity_variable}", 
+            reference="maximumRateActivity",
+            parameters=f"{capActivity_variable} {cap_variable} {round(factor)}"
+        )
+    
     def add_minimum_annual_activity_rate_per_timeslice_constraint(self, modes, factors_df, non_dispatchable_technologies):
         
         if not self.find_predicate("minimumAnnualRateActivityPerTimeslice"):
@@ -836,17 +880,14 @@ class XMLGeneratorClass:
         if self.max_arity < 2:
             self.max_arity = 2
 
-    def add_installing_cost_minimization_constraint(self, weight, variable_capacity_name, previous_installed_capacity, cost_per_MW, extra_name=""):
+    def add_installing_cost_minimization_constraint(self, variable_capacity_name, previous_installed_capacity, cost_per_MW, extra_name=""):
         """Adds a soft constraint to the XML instance that enforces maximum installing cost."""
-
-        if not isinstance(weight, int) or not isinstance(cost_per_MW, int):
-            raise ValueError("weight and cost_per_MW must be integers")
 
         if not self.find_function(f"minimize_installingCost"):
             self.add_function(
                 name=f"minimize_installingCost", 
-                parameters="int weight int capacity int oldCapacity int cost_per_MW",
-                functional= div(mul(sub("capacity", "oldCapacity"), "cost_per_MW"), "weight")
+                parameters="int capacity int oldCapacity int cost_per_MW",
+                functional= mul(sub("capacity", "oldCapacity"), "cost_per_MW")
             )
 
         self.add_constraint(
@@ -854,7 +895,7 @@ class XMLGeneratorClass:
             arity=1,
             scope=f"{variable_capacity_name}",
             reference=f"minimize_installingCost",
-            parameters=f"{weight} {variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
+            parameters=f"{variable_capacity_name} {previous_installed_capacity} {cost_per_MW}"
         )
 
     def add_minimizing_operating_cost_constraint(self, weight, rateActivity_variables, cost_per_unit_of_activity, year_split_df):
