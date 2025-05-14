@@ -66,6 +66,15 @@ class ConfigParserClass:
     def get_years(self):
         return self.config['outline']['years']
     
+    def get_domains(self):
+        """
+        Returns the domains for the model.
+        :return: list
+        """
+        self.logger.debug("Domains set in config parser")
+        return self.config['outline']['domains']
+
+    
     @deprecated(reason="Data extracted by dataParser class")
     def get_powerplants_data(self):
         powerplants = []

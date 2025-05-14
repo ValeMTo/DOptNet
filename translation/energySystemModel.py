@@ -12,12 +12,13 @@ from tqdm import tqdm
 import numpy as np
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+import time
 import xml.etree.ElementTree as ET
 
 class EnergyModelClass:
     def __init__(self):
         self.config_parser = ConfigParserClass(file_path='config.yaml')
-        self.logger = self.create_logger(**self.config_parser.get_log_info())
+        self.logger = self.create_logger(*self.config_parser.get_log_info())
         self.config_parser.set_logger(self.logger)
 
         self.data_parser = osemosysDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
@@ -50,7 +51,11 @@ class EnergyModelClass:
     def solve(self):
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
+            start_time = time.time()
             self.data_parser.load_data(year)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"Time taken to load data for year {year}: {elapsed_time:.2f} seconds")
             self.solve_year(year)
             self.update_data(year)
         self.logger.info("Energy model solved")
@@ -58,14 +63,14 @@ class EnergyModelClass:
     def solve_year(self, year):
         self.logger.info(f"Solving the energy model for {year}")
 
-        for t in range(self.time_resolution):
-            marginal_costs_df = self.solve_internal_DCOP(t)
+        for t in self.time_resolution:
+            marginal_costs_df = self.solve_internal_DCOP(t, year)
             for k in range(self.max_iteration):
                 if self.check_convergence(marginal_costs_df):
                     self.logger.info(f"Convergence reached for time {t} and year {year}")
                     break
                 self.solve_transmission_problem(t, year)
-                marginal_costs_df = self.solve_internal_DCOP(t)
+                marginal_costs_df = self.solve_internal_DCOP(t, year)
         if k == self.max_iteration:
             self.logger.warning(f"Maximum iterations reached for time {t} and year {year}")
 
@@ -148,11 +153,11 @@ class EnergyModelClass:
             country=country,
             logger=self.logger,
             data=self.data_parser.get_country_data(country, time),
-            output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
+            demand=self.data_parser.load_demand(year, country, time),
+            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
         )
         energy_country_class.generate_xml(
-            domains=self.data_parser.get_domains(),
-            delta_marginal_cost_percentage=self.delta_marginal_cost,
+            domains=self.create_domains(problem_type='internal')
         )
         energy_country_class.print_xml(f"{country}_0.xml")
         energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)
@@ -202,4 +207,26 @@ class EnergyModelClass:
             executor.map(process_file, os.listdir(problem_folder))
 
         return output_folder
+    
+    def create_domains(self, problem_type='internal'):
+        self.logger.debug(f"Creating domains for {problem_type} problem in the model")
+        domains = self.config_parser.get_domains()
+
+        if problem_type == 'internal':
+            domains_mapping = {
+                'capacity_domain': range(
+                    domains['capacity']['min'],
+                    domains['capacity']['max'] + 1,
+                    domains['capacity']['step']
+                ),
+                'rateActivity_domain': range(
+                    domains['rateActivity']['min'],
+                    domains['rateActivity']['max'] + 1,
+                    domains['rateActivity']['step']
+                )
+            }
+            return domains_mapping
+
+        self.logger.warning(f"Problem type {problem_type} not recognized. Returning empty domains.")
+        raise ValueError(f"Problem type {problem_type} in create_domains method not recognized.")
 
