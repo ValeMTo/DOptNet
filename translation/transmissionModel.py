@@ -1,5 +1,3 @@
-from translation.parsers.configParser import ConfigParserClass
-from translation.parsers.osemosysDataParser import localDataParserClass
 from translation.xmlGenerator import XMLGeneratorClass
 from deprecated import deprecated
 import pandas as pd
