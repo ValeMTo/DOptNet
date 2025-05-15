@@ -1,6 +1,7 @@
 import pandas as pd
 from translation.parsers.dataParser import dataParserClass
 from deprecated import deprecated
+from itertools import product
 class osemosysDataParserClass(dataParserClass):
     def __init__(self, logger, file_path): #tech_path, fuel_path):
         self.logger = logger
@@ -9,7 +10,7 @@ class osemosysDataParserClass(dataParserClass):
         #self.tech_file_path = tech_path
         #self.fuel_file_path = fuel_path
 
-        self.dfs = {} 
+        self.merged_df = None
 
     def convert_fromGW_capacity_unit(self, data, unit):
         if unit == 'GW':
@@ -26,61 +27,63 @@ class osemosysDataParserClass(dataParserClass):
         specified_demand_profile_df = self.extract_specified_demand_profile(year=year, timeslices=True)
         demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
         demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
-        specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0]
+        specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0] # GW
+        year_split_df = self.extract_year_split(year=year)
+        year_split_coefficient = year_split_df[year_split_df['TIMESLICE'] == timeslice]['YEAR_SPLIT'].values[0] 
 
-        return specified_demand
+        return year_split_coefficient, self.convert_fromGW_capacity_unit(specified_demand, unit='MW'), 
     
-    def load_data(self, year):
+    def load_data(self, year, countries):
         self.logger.debug("Loading data from Excel file")
         
-        self.dfs['minimum_installed_capacity'] = self.extract_minimum_installed_capacity(year=year)
-        self.dfs['capacity_factors'] = self.extract_capacity_factors(year=year, timeslices=True)
-        self.dfs['availability_factors'] = self.extract_availability_factors(year=year)
-        self.dfs['capacity_to_activity_unit'] = self.extract_capacity_to_activity_unit()
-        #self.dfs['specified_annual_demand'] = self.extract_specified_annual_demand(year=year)
-        #self.dfs['specified_demand_profile'] = self.extract_specified_demand_profile(year=year, timeslices=True)
-        #self.dfs['year_split'] = self.extract_year_split(year=year)
-        #self.dfs['accumulated_annual_demand'] = self.extract_accumulated_annual_demand(year=year) #Fuel only
-        self.dfs['capital_costs'] = self.extract_capital_costs(year=year)
-        self.dfs['fixed_costs'] = self.extract_fixed_costs(year=year)
-        self.dfs['variable_costs'] = self.extract_variable_costs(year=year)
-        #self.dfs['discount_rate'] = self.extract_discount_rate()
-        self.dfs['operational_lifetime'] = self.extract_technology_operational_life()
-        self.dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year)
-        self.dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year)
-        self.dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year)
-        self.dfs['emission_activity_ratio'] = self.extract_emission_activity_ratio(year=year)
-        #self.dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
-        #self.dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
-        self.dfs['output_activity_ratio'] = self.extract_output_activity_ratio(year=year)
-        self.dfs['input_activity_ratio'] = self.extract_input_activity_ratio(year=year)
+        dfs = {}
+
+        dfs['minimum_installed_capacity'] = self.extract_minimum_installed_capacity(year=year)
+        dfs['capacity_factors'] = self.extract_capacity_factors(year=year, timeslices=True)
+        dfs['availability_factors'] = self.extract_availability_factors(year=year)
+        dfs['capacity_to_activity_unit'] = self.extract_capacity_to_activity_unit()
+        #dfs['specified_annual_demand'] = self.extract_specified_annual_demand(year=year)
+        #dfs['specified_demand_profile'] = self.extract_specified_demand_profile(year=year, timeslices=True)
+        #dfs['year_split'] = self.extract_year_split(year=year)
+        #dfs['accumulated_annual_demand'] = self.extract_accumulated_annual_demand(year=year) #Fuel only
+        dfs['capital_costs'] = self.extract_capital_costs(year=year)
+        dfs['fixed_costs'] = self.extract_fixed_costs(year=year)
+        dfs['variable_costs'] = self.extract_variable_costs(year=year)
+        #dfs['discount_rate'] = self.extract_discount_rate()
+        dfs['operational_lifetime'] = self.extract_technology_operational_life()
+        dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year)
+        dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year)
+        dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year)
+        dfs['emission_activity_ratio'] = self.extract_emission_activity_ratio(year=year)
+        #dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
+        #dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
+        dfs['output_activity_ratio'] = self.extract_output_activity_ratio(year=year)
+        dfs['input_activity_ratio'] = self.extract_input_activity_ratio(year=year)
+
+        technologies_df = self.extract_technologies().drop_duplicates()
+        emissions_df = self.extract_emissions().drop_duplicates()    
+        fuels_df = self.extract_fuels().drop_duplicates()
+        timeslices_df = self.extract_timeslices().drop_duplicates()
+
+        combinations = []
+        for country in countries:
+            techs = technologies_df[technologies_df['COUNTRY'] == country]['TECHNOLOGY']
+            emis = emissions_df[emissions_df['COUNTRY'] == country]['EMISSION']
+            fuels = fuels_df[fuels_df['COUNTRY'] == country]['FUEL']
+            timeslices = timeslices_df['TIMESLICE']
+            combinations.extend(product([country], techs, emis, fuels, timeslices))
+
+        self.merged_df = pd.DataFrame(combinations, columns=['COUNTRY', 'TECHNOLOGY', 'EMISSION', 'FUEL', 'TIMESLICE'])
+
+        for key, df in dfs.items():
+            self.merged_df = self.merged_df.merge(df, on=[col for col in df.columns if col in self.merged_df.columns], how='left')
 
         self.logger.debug("Data loaded successfully for year %s", year)
 
     def get_country_data(self, country, time):
         self.logger.debug("Getting data for %s in %s", country, time)
 
-        country_data = {}
-        for key, df in self.dfs.items():
-            if 'COUNTRY' in df.columns:
-                filtered_df = df[df['COUNTRY'] == country]
-            if 'TIMESLICE' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['TIMESLICE'] == time]
-                country_data[key] = filtered_df
-            else:
-                country_data[key] = df  # Include unfiltered data if 'COUNTRY' is not a column
-            self.logger.debug("Data for %s: %s", key, country_data[key].head())
-
-        technologies_df = self.extract_technologies_per_country(country)
-        pivoted_data = technologies_df[['TECHNOLOGY']].drop_duplicates().set_index('TECHNOLOGY')
-
-        for key, df in country_data.items():
-            if 'TECHNOLOGY' in df.columns:
-                country_data[key] = df.set_index('TECHNOLOGY')
-            else:
-                raise ValueError(f"Key {key} does not contain 'TECHNOLOGY' column")
-        merged_df = pd.concat([df for df in country_data.values()])
-        country_data = pivoted_data.merge(merged_df, left_index=True, right_index=True, how='left')
+        country_data = self.merged_df[(self.merged_df['COUNTRY'] == country) & (self.merged_df['TIMESLICE'] == time)]
         return country_data
 
     def extract_AHA_dataset(self, year):
@@ -362,6 +365,35 @@ class osemosysDataParserClass(dataParserClass):
 
         return technologies_df
     
+    def extract_technologies(self):
+        technologies_df = pd.read_excel(self.data_file_path, sheet_name="TECHNOLOGY", header=None)
+        technologies_df['COUNTRY'] = technologies_df[0].map(lambda x: x[:2])
+        technologies_df['TECHNOLOGY'] = technologies_df[0].map(lambda x: x[2:])
+
+        power_plants_df = pd.read_csv("./osemosys_data/techcodes(in).csv")
+        power_plants_df = power_plants_df[power_plants_df['Group'] == 'Power_plants']
+        power_plants_df = power_plants_df[['code (Old)']].rename(columns={'code (Old)': 'TECHNOLOGY'})
+
+        technologies_df = technologies_df.merge(power_plants_df, left_on='TECHNOLOGY', right_on='TECHNOLOGY', how='inner')
+        technologies_df['TECHNOLOGY'] = technologies_df['COUNTRY'] + technologies_df['TECHNOLOGY']
+        return technologies_df[['COUNTRY', 'TECHNOLOGY']]
+    
+    def extract_emissions(self):
+        emissions_df = pd.read_excel(self.data_file_path, sheet_name="EMISSION", header=None)
+        emissions_df['COUNTRY'] = emissions_df[0].map(lambda x: x[:2])
+        return emissions_df[['COUNTRY', 0]].rename(columns={0: 'EMISSION'})
+    
+    def extract_fuels(self):
+        fuels_df = pd.read_excel(self.data_file_path, sheet_name="FUEL", header=None)
+        fuels_df['COUNTRY'] = fuels_df[0].map(lambda x: x[:2])
+        fuels_df['FUEL'] = fuels_df[0]
+        return fuels_df[['COUNTRY', 'FUEL']]
+    
+    def extract_timeslices(self):
+        timeslices_df = pd.read_excel(self.data_file_path, sheet_name="TIMESLICE", header=None)
+        timeslices_df['TIMESLICE'] = timeslices_df[0]
+        return timeslices_df[['TIMESLICE']]
+    
     def extract_technologies_per_country(self, country):
         technologies_df = pd.read_csv("./osemosys_data/techcodes(in).csv")
         technologies_df = technologies_df[technologies_df['Group'] == 'Power_plants']
@@ -369,7 +401,7 @@ class osemosysDataParserClass(dataParserClass):
         technologies_df['COUNTRY'] = country
         technologies_df['TECHNOLOGY'] = technologies_df['COUNTRY'] + technologies_df['TECHNOLOGY']
 
-        return technologies_df
+        return technologies_df[:5]
     
     def extract_output_activity_ratio(self, year):
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="OutputActivityRatio")
@@ -392,6 +424,7 @@ class osemosysDataParserClass(dataParserClass):
     def extract_fuels(self):
         fuels_df = pd.read_excel(self.data_file_path, sheet_name="FUEL", header=None)
         fuels_df['FUEL'] = fuels_df[0]
+        fuels_df['COUNTRY'] = fuels_df[0].map(lambda x: x[:2])
         fuels_df.drop(columns=[0], inplace=True)
         return fuels_df
 

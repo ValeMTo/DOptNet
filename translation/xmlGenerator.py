@@ -145,6 +145,7 @@ class XMLGeneratorClass:
         ET.SubElement(predicate_element, "parameters").text = parameters
         expression_element = ET.SubElement(predicate_element, "expression")
         ET.SubElement(expression_element, "functional").text = functional
+        self.predicates[name] = 1
 
     def add_function(self, name, parameters, functional):
         """Adds a single function element with parameters and functional expression."""
@@ -233,6 +234,8 @@ class XMLGeneratorClass:
                 return variables[0]
             return add(variables[0], build_recursive(variables[1:]))
         
+        self.logger.debug(f"Adding minimum demand constraint with extra_name '{extra_name}' and demand: {demand}")
+        constraint_name = f"minimumDemand_{extra_name}"
         if not isinstance(demand, int):
             raise ValueError("demand must be an integer")
         
@@ -244,17 +247,28 @@ class XMLGeneratorClass:
             )
         
         self.add_constraint(
-            name=f"minimumDemand_{extra_name}", 
+            name=constraint_name, 
             arity=len(variables), 
             scope=" ".join(variables),
             reference="minimumDemand",
             parameters=f"{demand} {' '.join(variables)}"
         )
 
-        return f"minimumDemand_constraint"
+        return constraint_name
+
+    def remove_constraint(self, name):
+        """Removes a constraint element by name."""
+        constraints_element = self.instance.find("constraints")
+        if constraints_element is not None:
+            for constraint in constraints_element.findall("constraint"):
+                if constraint.get("name") == name:
+                    constraints_element.remove(constraint)
+                    return
+
+        raise ValueError(f"Constraint {name} not found")
 
     @deprecated
-    def add_minimum_respecting_demand_df(self, timeslice_technologies_modes, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
+    def add_minimum_respecting_demand(self, timeslice_technologies_modes, specified_demand_profile_df, specified_annual_demand_df, year_split_df):
         def build_recursive(variables):
             if len(variables) == 1:
                 return variables[0]
@@ -419,19 +433,38 @@ class XMLGeneratorClass:
                     
     def add_maximum_activity_rate_constraint(self, cap_variable, capActivity_variable, factor):
         """Adds an hard constraint to the XML instance that enforces maximum rate fo activity."""
-        if not self.find_predicate("maximumRateActivity"):
-            self.add_predicate(
-                name="maximumRateActivity", 
-                parameters="int rateActivity int capacity int factor", 
-                functional=boolean_le("rateActivity", mul("capacity", "factor"))
+        if factor >= 1:
+            if not self.find_predicate("maximumRateActivity_mul"):
+                self.add_predicate(
+                    name="maximumRateActivity_mul", 
+                    parameters="int rateActivity int capacity int factor", 
+                    functional=boolean_le("rateActivity", mul("capacity", "factor"))
+                )
+        elif 0 <= factor < 1:
+            if not self.find_predicate("maximumRateActivity_div"):
+                self.add_predicate(
+                    name="maximumRateActivity_div", 
+                    parameters="int rateActivity int capacity int factor", 
+                    functional=boolean_le("rateActivity", div("capacity", "factor"))
+                )
+        else:
+            raise ValueError("The factor should be positive")
+        if factor >= 1 or factor == 0:
+            self.add_constraint(
+                name=f"maximumRateActivity_{cap_variable.split('_')[0]}", 
+                arity=2, 
+                scope=f"{cap_variable} {capActivity_variable}", 
+                reference="maximumRateActivity_mul",
+                parameters=f"{capActivity_variable} {cap_variable} {round(factor)}"
             )
-        self.add_constraint(
-            name=f"maximumRateActivity_{cap_variable.split('_')[0]}", 
-            arity=2, 
-            scope=f"{cap_variable} {capActivity_variable}", 
-            reference="maximumRateActivity",
-            parameters=f"{capActivity_variable} {cap_variable} {round(factor)}"
-        )
+        elif factor < 1 and factor > 0: 
+            self.add_constraint(
+                name=f"maximumRateActivity_{cap_variable.split('_')[0]}", 
+                arity=2, 
+                scope=f"{cap_variable} {capActivity_variable}", 
+                reference="maximumRateActivity_div",
+                parameters=f"{capActivity_variable} {cap_variable} {round(1/factor)}"
+            )
     
     def add_minimum_annual_activity_rate_per_timeslice_constraint(self, modes, factors_df, non_dispatchable_technologies):
         

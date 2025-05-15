@@ -52,7 +52,7 @@ class EnergyModelClass:
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
             start_time = time.time()
-            self.data_parser.load_data(year)
+            self.data_parser.load_data(year, self.countries)
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(f"Time taken to load data for year {year}: {elapsed_time:.2f} seconds")
@@ -149,20 +149,23 @@ class EnergyModelClass:
         if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
             os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
 
+        year_split, demand = self.data_parser.load_demand(year, country, time)
+
         energy_country_class = EnergyAgentClass(
             country=country,
             logger=self.logger,
             data=self.data_parser.get_country_data(country, time),
-            demand=self.data_parser.load_demand(year, country, time),
+            year_split=year_split,
+            demand=demand,
             xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
         )
         energy_country_class.generate_xml(
             domains=self.create_domains(problem_type='internal')
         )
         energy_country_class.print_xml(f"{country}_0.xml")
-        energy_country_class.change_demand(delta_marginal_cost_percentage=self.delta_marginal_cost)
+        energy_country_class.change_demand(demand_variation_percentage=self.delta_marginal_cost)
         energy_country_class.print_xml(f"{country}_+{self.delta_marginal_cost}.xml")
-        energy_country_class.change_demand(delta_marginal_cost_percentage=-self.delta_marginal_cost)
+        energy_country_class.change_demand(demand_variation_percentage=-self.delta_marginal_cost)
         energy_country_class.print_xml(f"{country}_-{self.delta_marginal_cost}.xml")
 
     def solve_DCOP(self, input_path, output_path):
@@ -200,7 +203,7 @@ class EnergyModelClass:
         def process_file(file_name):
             if file_name.endswith(".xml"):
                 input_path = os.path.join(problem_folder, file_name)
-                output_path = os.path.join(output_folder, f"{file_name}_output.xml")
+                output_path = os.path.join(output_folder, f"{file_name.replace('.xml')}_output.xml")
                 self.solve_DCOP(input_path, output_path)
 
         with ThreadPoolExecutor() as executor:

@@ -24,10 +24,10 @@ class dataParserClass:
         that are the data from Open Street Map. No assumptions are made.
         The dataframe is filtered to only include cross-border lines if cross_border_only is True.
         """
-        retriever = transmissionRetrieverClass(self.logger, regions)
+        retriever = transmissionRetrieverClass(self.logger, regions=regions)
         if cross_border_only:
             self.logger.info("Filtering cross-border lines")
-            return retriever.extract_cross_border_lines(regions, cross_border_only=cross_border_only)
+            return retriever.extract_cross_border_lines()
         raise NotImplementedError("The method without cross-border lines is not implemented yet")
 
 

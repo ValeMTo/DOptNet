@@ -1,5 +1,4 @@
-from translation.parsers.configParser import ConfigParserClass
-from translation.parsers.osemosysDataParser import osemosysDataParserClass
+
 from translation.xmlGenerator import XMLGeneratorClass
 from deprecated import deprecated
 import pandas as pd
@@ -8,10 +7,11 @@ import os
 from itertools import product
 
 class EnergyAgentClass:
-    def __init__(self, country, logger, data, demand, xml_file_path):
+    def __init__(self, country, logger, data, year_split, demand, xml_file_path):
         self.name = country
         self.logger = logger
         self.data = data
+        self.year_split = year_split
         self.demand = demand
         self.demand_constraint = None
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
@@ -25,12 +25,13 @@ class EnergyAgentClass:
         self.xml_generator.add_agents([self.name])
         self.xml_generator.add_domains(domains)
         
-        for var in self.data.index:
+        self.tech_df = self.data.copy().drop_duplicates(subset=['TECHNOLOGY'], keep='first').set_index('TECHNOLOGY')
+        for var in self.tech_df.index:
             self.xml_generator.add_variable(name=f"{var}_capacity", domain='capacity_domain', agent=self.name)
             self.xml_generator.add_variable(name=f"{var}_rateActivity", domain='rateActivity_domain', agent=self.name)
 
-        # Add constraints here
-        for technology, row in self.data.iterrows():
+        
+        for technology, row in self.tech_df.iterrows():
             if pd.notna(row['MIN_INSTALLED_CAPACITY']) and row['MIN_INSTALLED_CAPACITY'] > 0:
                 self.xml_generator.add_maximum_capacity_constraint(
                     variable_name=f"{technology}_capacity",
@@ -38,16 +39,17 @@ class EnergyAgentClass:
                 )
                 if row['CAPITAL_COST'] > 0:
                     self.xml_generator.add_installing_cost_minimization_constraint(
-                        variable_name=f"{technology}_capacity",
+                        variable_capacity_name=f"{technology}_capacity",
                         previous_installed_capacity=round(row['MIN_INSTALLED_CAPACITY']),
                         cost_per_MW=round(row['CAPITAL_COST']),
                         extra_name=f"capital_cost"
                     )
             if pd.notna(row['CAPACITY_FACTOR']) and pd.notna(row['AVAILABILITY_FACTOR']) and pd.notna(row['CAPACITY_TO_ACTIVITY_UNIT']):
+                factor = round(row['CAPACITY_FACTOR']*row['AVAILABILITY_FACTOR']*row['CAPACITY_TO_ACTIVITY_UNIT']*self.year_split)
                 self.xml_generator.add_maximum_activity_rate_constraint(
                     cap_variable=f"{technology}_capacity",
                     capActivity_variable=f"{technology}_rateActivity",
-                    factor=round(row['CAPACITY_FACTOR']*row['AVAILABILITY_FACTOR']*row['CAPACITY_TO_ACTIVITY_UNIT'])
+                    factor=factor,
                 )
             else:
                 self.xml_generator.add_maximum_activity_rate_constraint(
@@ -67,11 +69,11 @@ class EnergyAgentClass:
                     max_capacity=0
                 )
             # Add constraint on fixed cost
-            # Add constraint on variable cost
+            # Add constraint on variable costF
 
-        self.demand_constraint = self.xml_generator.add_minimum_respecting_demand(
-            variables = [f"{var}_rateActivity" for var in self.data.index],
-            demand = self.demand,
+        self.demand_constraint = self.xml_generator.add_minimum_demand_constraint(
+            variables = [f"{var}_rateActivity" for var in self.tech_df.index],
+            demand = round(self.demand),
             extra_name = f"0"
         )
 
@@ -85,13 +87,13 @@ class EnergyAgentClass:
             self.logger.debug(f"Changing demand for {self.name} by {demand_variation_percentage}%")
             self.xml_generator.remove_constraint(self.demand_constraint)
 
-            new_demand = self.demand * (1 + demand_variation_percentage / 100)
+            new_demand = round(self.demand * (1 + demand_variation_percentage / 100))
 
             # Add the updated demand constraint
-            self.demand_constraint = self.xml_generator.add_minimum_respecting_demand(
-                variables=[f"{var}_rateActivity" for var in self.data.index],
+            self.demand_constraint = self.xml_generator.add_minimum_demand_constraint(
+                variables=[f"{var}_rateActivity" for var in self.tech_df.index],
                 demand=new_demand,
-                extra_name=f"{self.demand_variation_percentage}"
+                extra_name=f"{demand_variation_percentage}"
             )
-        
-        raise NotImplementedError("XML")
+        else:
+            raise NotImplementedError("XML instance missing")
