@@ -11,7 +11,7 @@ from itertools import product
 from tqdm import tqdm
 import numpy as np
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import xml.etree.ElementTree as ET
 
@@ -169,6 +169,7 @@ class EnergyModelClass:
         energy_country_class.print_xml(f"{country}_-{self.delta_marginal_cost}.xml")
 
     def solve_DCOP(self, input_path, output_path):
+        self.logger.debug(f"Solving DCOP for {input_path} and saving to {output_path}")
         java_command = [
             'java', 
             '-Xmx2G', 
@@ -203,11 +204,27 @@ class EnergyModelClass:
         def process_file(file_name):
             if file_name.endswith(".xml"):
                 input_path = os.path.join(problem_folder, file_name)
-                output_path = os.path.join(output_folder, f"{file_name.replace('.xml')}_output.xml")
+                output_path = os.path.join(output_folder, f"{file_name.replace('.xml', '')}_output.xml")
                 self.solve_DCOP(input_path, output_path)
 
         with ThreadPoolExecutor() as executor:
-            executor.map(process_file, os.listdir(problem_folder))
+            futures = [executor.submit(process_file, file_name) for file_name in os.listdir(problem_folder)]
+            for future in as_completed(futures):
+                future.result()  # Wait for each thread to complete
+
+        # Check that each output file in the folder contains a "valuation" parameter, so the run was successful
+        for file_name in os.listdir(output_folder):
+            if file_name.endswith("_output.xml"):
+                file_path = os.path.join(output_folder, file_name)
+                try:
+                    tree = ET.parse(file_path)
+                    root = tree.getroot()
+                    if "valuation" not in root.attrib:
+                        self.logger.error(f"File {file_name} is missing the 'valuation' parameter.")
+                        raise ValueError(f"File {file_name} is missing the 'valuation' parameter.")
+                except ET.ParseError as e:
+                    self.logger.error(f"Error parsing XML file {file_name}: {e}")
+                    raise ValueError(f"Error parsing XML file {file_name}: {e}")
 
         return output_folder
     

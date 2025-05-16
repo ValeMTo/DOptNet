@@ -38,7 +38,7 @@ class osemosysDataParserClass(dataParserClass):
         
         dfs = {}
 
-        dfs['minimum_installed_capacity'] = self.extract_minimum_installed_capacity(year=year)
+        dfs['minimum_installed_capacity'] = self.extract_minimum_installed_capacity(year=year, unit='MW')
         dfs['capacity_factors'] = self.extract_capacity_factors(year=year, timeslices=True)
         dfs['availability_factors'] = self.extract_availability_factors(year=year)
         dfs['capacity_to_activity_unit'] = self.extract_capacity_to_activity_unit()
@@ -46,14 +46,14 @@ class osemosysDataParserClass(dataParserClass):
         #dfs['specified_demand_profile'] = self.extract_specified_demand_profile(year=year, timeslices=True)
         #dfs['year_split'] = self.extract_year_split(year=year)
         #dfs['accumulated_annual_demand'] = self.extract_accumulated_annual_demand(year=year) #Fuel only
-        dfs['capital_costs'] = self.extract_capital_costs(year=year)
-        dfs['fixed_costs'] = self.extract_fixed_costs(year=year)
-        dfs['variable_costs'] = self.extract_variable_costs(year=year)
+        dfs['capital_costs'] = self.extract_capital_costs(year=year, unit='B$')
+        dfs['fixed_costs'] = self.extract_fixed_costs(year=year, unit='M$')
+        dfs['variable_costs'] = self.extract_variable_costs(year=year, unit='M$')
         #dfs['discount_rate'] = self.extract_discount_rate()
         dfs['operational_lifetime'] = self.extract_technology_operational_life()
-        dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year)
-        dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year)
-        dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year)
+        dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year, unit='MW')
+        dfs['total_technology_annual_activity_upper_limit'] = self.extract_total_technology_annual_activity_upper_limit(year=year, unit='TJ')
+        dfs['total_technology_annual_activity_lower_limit'] = self.extract_total_technology_annual_activity_lower_limit(year=year, unit='TJ')
         dfs['emission_activity_ratio'] = self.extract_emission_activity_ratio(year=year)
         #dfs['emissions_penalty'] = self.extract_emissions_penalty(year=year)
         #dfs['annual_emission_limit'] = self.extract_annual_emission_limit(year=year)
@@ -67,7 +67,7 @@ class osemosysDataParserClass(dataParserClass):
 
         combinations = []
         for country in countries:
-            techs = technologies_df[technologies_df['COUNTRY'] == country]['TECHNOLOGY']
+            techs = technologies_df[technologies_df['COUNTRY'] == country]['TECHNOLOGY'][:3]
             emis = emissions_df[emissions_df['COUNTRY'] == country]['EMISSION']
             fuels = fuels_df[fuels_df['COUNTRY'] == country]['FUEL']
             timeslices = timeslices_df['TIMESLICE']
@@ -401,7 +401,7 @@ class osemosysDataParserClass(dataParserClass):
         technologies_df['COUNTRY'] = country
         technologies_df['TECHNOLOGY'] = technologies_df['COUNTRY'] + technologies_df['TECHNOLOGY']
 
-        return technologies_df[:5]
+        return technologies_df
     
     def extract_output_activity_ratio(self, year):
         technologies_df = pd.read_excel(self.data_file_path, sheet_name="OutputActivityRatio")
