@@ -6,6 +6,8 @@ config:
   outline:
     countries:
     - BW
+    - ZM
+    - ZW
     years:
     - 2030
     data_file_path: ./osemosys_data/input_data/TEMBA_SSP4-60.xlsx
@@ -16,6 +18,8 @@ config:
     max_iterations: 30
     delta_marginal_cost: 0.05
     marginal_cost_tolerance: 100 
+    expansion_enabled: False
+    cost_transmission_line: 150
     domains: 
       capacity: 
           min: 0
@@ -25,6 +29,8 @@ config:
           min: 0
           max: 4000000
           step: 1000
-
-    
+      transmission: 
+          min: 0
+          max: 20000
+          step: 500
   output_file_path: solutions/test-2030

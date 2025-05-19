@@ -23,15 +23,21 @@ class osemosysDataParserClass(dataParserClass):
     
     def load_demand(self, year, country, timeslice):
         self.logger.debug("Loading demand data")
-        specified_annual_demand_df = self.extract_specified_annual_demand(year=year)
+        specified_annual_demand_df = self.extract_specified_annual_demand(year=year, unit='TJ')
         specified_demand_profile_df = self.extract_specified_demand_profile(year=year, timeslices=True)
         demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
         demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
-        specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0] # GW
+        try:
+            specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0] # GW
+        except IndexError:
+            self.logger.error("No demand data found for country %s and timeslice %s", country, timeslice)
+            raise ValueError("No demand data found for country %s and timeslice %s" % (country, timeslice))
+        
+
         year_split_df = self.extract_year_split(year=year)
         year_split_coefficient = year_split_df[year_split_df['TIMESLICE'] == timeslice]['YEAR_SPLIT'].values[0] 
 
-        return year_split_coefficient, self.convert_fromGW_capacity_unit(specified_demand, unit='MW'), 
+        return year_split_coefficient, specified_demand 
     
     def load_data(self, year, countries):
         self.logger.debug("Loading data from Excel file")

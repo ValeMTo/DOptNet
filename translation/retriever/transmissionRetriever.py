@@ -172,7 +172,7 @@ class transmissionRetrieverClass():
         else:  # HVDC or very high-voltage AC
             return 2500
     
-    def extract_cross_border_lines(self):
+    def extract_cross_border_lines(self, unit='TJ'):
         self.logger.info("Extracting cross-border lines")
 
         countries, lines = self.get_power_lines()
@@ -204,7 +204,19 @@ class transmissionRetrieverClass():
             'circuit': 'first',  # Keep the first circuit for simplicity
             'cables': 'first'    # Keep the first cables for simplicity
         })
-        return df[['start_country', 'end_country', 'capacity']].reset_index(drop=True)
+        df = df[['start_country', 'end_country', 'capacity']].reset_index(drop=True)
+        df_copy = df.copy()
+        df_copy = df_copy.rename(columns={"start_country": "end_country", "end_country": "start_country"})
+        df = pd.concat([df, df_copy], ignore_index=True).groupby(['start_country', 'end_country'], as_index=False).agg({
+            'capacity': 'sum'
+        })
+        if unit == 'GWh':
+            df['capacity'] = df['capacity'] * 1e-3
+        elif unit == 'TJ':
+            df['capacity'] = df['capacity'] * 1e-3 * 3.6
+        else:
+            raise ValueError("Unsupported unit. Use 'GWh' or 'TJ'.")
+        return df
     
 
 if __name__ == "__main__":

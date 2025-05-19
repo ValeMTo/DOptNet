@@ -20,15 +20,16 @@ class EnergyModelClass:
         self.config_parser = ConfigParserClass(file_path='config.yaml')
         self.logger = self.create_logger(*self.config_parser.get_log_info())
         self.config_parser.set_logger(self.logger)
-
-        self.data_parser = osemosysDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
-        self.xml_generator = XMLGeneratorClass(logger = self.logger)
-
+        self.countries = self.config_parser.get_countries()
         self.name = self.config_parser.get_problem_name()
         self.time_resolution = self.config_parser.get_annual_time_resolution()
         self.years = self.config_parser.get_years()
 
-        self.countries = self.config_parser.get_countries()
+        self.data_parser = osemosysDataParserClass(logger = self.logger, file_path=self.config_parser.get_file_path())
+        self.transmission_data = self.data_parser.get_transmission_data(self.countries)
+        self.xml_generator = XMLGeneratorClass(logger = self.logger)
+
+
         self.logger.info("Energy model initialized")
         self.max_iteration = self.config_parser.get_max_iteration()
         self.delta_marginal_cost = self.config_parser.get_delta_marginal_cost()
@@ -48,6 +49,17 @@ class EnergyModelClass:
         )
         return logging.getLogger(__name__)
     
+    def build_demand_map(self, year, t): 
+        self.logger.info(f"Building demand map for year {year}")
+        self.demand_map = {}
+        for country in self.countries:
+            year_split, demand = self.data_parser.load_demand(year, country, t)
+            self.demand_map[country] = {
+                'demand': demand,
+                'marginal_demand': demand * self.delta_marginal_cost,
+            }
+        self.demand_map['year_split'] = year_split # Egual for all countries
+
     def solve(self):
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
@@ -64,6 +76,7 @@ class EnergyModelClass:
         self.logger.info(f"Solving the energy model for {year}")
 
         for t in self.time_resolution:
+            self.build_demand_map(year, t)
             marginal_costs_df = self.solve_internal_DCOP(t, year)
             for k in range(self.max_iteration):
                 if self.check_convergence(marginal_costs_df):
@@ -91,7 +104,7 @@ class EnergyModelClass:
             country: {
             f"-{self.delta_marginal_cost}": None,
             "0": None,
-            f"+{self.delta_marginal_cost}": None
+            f"+{self.delta_marginal_cost}": None,
             }
             for country in self.countries
         }
@@ -118,15 +131,18 @@ class EnergyModelClass:
 
         transmission_solver = TransmissionModelClass(
             countries=self.countries,
-            data=self.data_parser.get_transmission_data(self.countries),
+            data=self.transmission_data,
+            delta_demand_map=self.demand_map,
+            marginal_costs_df=self.marginal_costs_df,
+            cost_transmission_line=self.config_parser.get_cost_transmission_line(),
             logger=self.logger,
-            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/problems")
+            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/problems"),
+            expansion_enabled=self.config_parser.get_expansion_enabled(),
         )
 
-        transmission_solver.generate_xml()
+        transmission_solver.generate_xml(domains=self.create_domains(problem_type='transmission'))
         transmission_solver.print_xml(
             name=f"transmission_problem_{time}.xml",
-            output_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/outputs")
         )
 
     def check_convergence(self, marginal_costs_df):
@@ -149,14 +165,12 @@ class EnergyModelClass:
         if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
             os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
 
-        year_split, demand = self.data_parser.load_demand(year, country, time)
-
         energy_country_class = EnergyAgentClass(
             country=country,
             logger=self.logger,
             data=self.data_parser.get_country_data(country, time),
-            year_split=year_split,
-            demand=demand,
+            year_split=self.demand_map['year_split'],
+            demand=self.demand_map[country]['demand'],
             xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
         )
         energy_country_class.generate_xml(
@@ -243,6 +257,15 @@ class EnergyModelClass:
                     domains['rateActivity']['min'],
                     domains['rateActivity']['max'] + 1,
                     domains['rateActivity']['step']
+                )
+            }
+            return domains_mapping
+        elif problem_type == 'transmission':
+            domains_mapping = {
+                'capacity_domain': range(
+                    domains['transmission']['min'],
+                    domains['transmission']['max'] + 1,
+                    domains['transmission']['step']
                 )
             }
             return domains_mapping

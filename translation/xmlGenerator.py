@@ -1010,6 +1010,8 @@ class XMLGeneratorClass:
         the sum of export flows equals plus delta.
         """
         def build_recursive_add_expression(vars):
+            if len(vars) == 1:
+                return abs_val(vars[0])
             if len(vars) == 2:
                 return add(abs_val(vars[0]), abs_val(vars[1]))
             return add(abs_val(vars[0]), build_recursive_add_expression(vars[1:]))

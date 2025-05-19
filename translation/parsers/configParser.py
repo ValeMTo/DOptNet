@@ -74,6 +74,15 @@ class ConfigParserClass:
         self.logger.debug("Domains set in config parser")
         return self.config['outline']['domains']
     
+    def get_cost_transmission_line(self):
+        """
+        Returns the cost of the transmission line for the model.
+        :return: float
+        """
+        self.logger.debug("Cost transmission line set in config parser")
+        return self.config['outline']['cost_transmission_line']
+    
+    
     def get_timeout_time_steps(self):
         """
         Returns the timeout for the model.
@@ -81,8 +90,15 @@ class ConfigParserClass:
         """
         self.logger.debug("Timeout set in config parser")
         return self.config['outline']['timeout_time_step']
-
     
+    def get_expansion_enabled(self):
+        """
+        Returns the expansion enabled for the model.
+        :return: bool
+        """
+        self.logger.debug("Expansion enabled set in config parser")
+        return self.config['outline']['expansion_enabled']
+
     @deprecated(reason="Data extracted by dataParser class")
     def get_powerplants_data(self):
         powerplants = []
