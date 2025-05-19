@@ -73,6 +73,14 @@ class ConfigParserClass:
         """
         self.logger.debug("Domains set in config parser")
         return self.config['outline']['domains']
+    
+    def get_timeout_time_steps(self):
+        """
+        Returns the timeout for the model.
+        :return: int
+        """
+        self.logger.debug("Timeout set in config parser")
+        return self.config['outline']['timeout_time_step']
 
     
     @deprecated(reason="Data extracted by dataParser class")

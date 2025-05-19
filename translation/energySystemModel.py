@@ -177,7 +177,7 @@ class EnergyModelClass:
             'frodo2.18.1.jar:junit-4.13.2.jar:hamcrest-core-1.3.jar', 
             'frodo2.algorithms.AgentFactory', 
             '-timeout', 
-            '60000', 
+            str(self.config_parser.get_timeout_time_steps()*1000), 
             input_path, 
             'agents/DPOP/DPOPagentJaCoP.xml', 
             '-o', 
