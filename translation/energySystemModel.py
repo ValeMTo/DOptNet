@@ -14,6 +14,8 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
+
 
 class EnergyModelClass:
     def __init__(self):
@@ -35,6 +37,8 @@ class EnergyModelClass:
         self.delta_marginal_cost = self.config_parser.get_delta_marginal_cost()
         self.marginal_cost_tolerance = self.config_parser.get_marginal_cost_tolerance()
         self.marginal_costs_df = None
+        self.results_df = None
+        self.demand_map = {}
 
     def create_logger(self, log_level, log_file):
         log_dir = os.path.dirname(log_file)
@@ -51,34 +55,31 @@ class EnergyModelClass:
     
     def build_demand_map(self, year, t): 
         self.logger.info(f"Building demand map for year {year}")
-        self.demand_map = {}
+        self.demand_map[t] = {}
         for country in self.countries:
             year_split, demand = self.data_parser.load_demand(year, country, t)
-            self.demand_map[country] = {
-                'demand': demand,
-                'marginal_demand': demand * self.delta_marginal_cost,
-            }
-        self.demand_map['year_split'] = year_split # Egual for all countries
+            self.demand_map[t][country] = {
+                        'demand': demand,
+                        'marginal_demand': demand * self.delta_marginal_cost,
+                    }
+        self.demand_map[t]['year_split'] = year_split # year_split is the same for all countries for timeslice t
 
     def solve(self):
         self.logger.info("Solving the energy model")
         for year in tqdm(self.years, desc="Solving energy model"):
-            start_time = time.time()
-            self.data_parser.load_data(year, self.countries)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            print(f"Time taken to load data for year {year}: {elapsed_time:.2f} seconds")
+            self.data_parser.load_data(year=year, countries=self.countries, new_installable_capacity_df=self.results_df)
             self.solve_year(year)
             self.update_data(year)
         self.logger.info("Energy model solved")
+        self.results_df.to_csv(self.config_parser.get_output_file_path() + f"/results.csv")
     
     def solve_year(self, year):
         self.logger.info(f"Solving the energy model for {year}")
-
-        for t in self.time_resolution:
+        
+        for t in tqdm(self.time_resolution, desc=f"Solving year {year}"):
             self.build_demand_map(year, t)
             marginal_costs_df = self.solve_internal_DCOP(t, year)
-            for k in range(self.max_iteration):
+            for k in tqdm(range(self.max_iteration), desc=f"Solving time {t} for year {year}"):
                 if self.check_convergence(marginal_costs_df):
                     self.logger.info(f"Convergence reached for time {t} and year {year}")
                     break
@@ -92,7 +93,7 @@ class EnergyModelClass:
 
         for country in self.countries:
             self.create_internal_DCOP(country, t, year)
-        output_folder_path = self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{t}"))
+        output_folder_path = self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{t}/internal"))
         marginal_costs_df = self.calculate_marginal_costs(t, year, output_folder_path)
 
         self.logger.info(f"Marginal costs calculated for time {t} and year {year}")
@@ -120,10 +121,10 @@ class EnergyModelClass:
                 valuation = root.attrib.get("valuation")
 
                 self.logger.debug(f"Processing file {file_name} with valuation {valuation}")
-                df.at[country, demand] = int(valuation)
-
-        df['MC_import'] = (df["0"] - df[f"-{self.delta_marginal_cost}"]) / self.delta_marginal_cost
-        df['MC_export'] = (df[f"+{self.delta_marginal_cost}"] - df["0"]) / self.delta_marginal_cost
+                df.at[country, demand] = int(valuation) * 1e3  # Convert to k$ from M$
+                df.at[country, "marginal_demand"] = self.demand_map[t][country]['marginal_demand']
+        df['MC_import'] = (df["0"] - df[f"-{self.delta_marginal_cost}"]) / (df['marginal_demand'])
+        df['MC_export'] = (df[f"+{self.delta_marginal_cost}"] - df["0"]) / (df['marginal_demand'])
         return df
 
     def solve_transmission_problem(self, time, year):
@@ -132,11 +133,12 @@ class EnergyModelClass:
         transmission_solver = TransmissionModelClass(
             countries=self.countries,
             data=self.transmission_data,
-            delta_demand_map=self.demand_map,
+            delta_demand_map=self.demand_map[time],
+            year_split=self.demand_map[time]['year_split'],
             marginal_costs_df=self.marginal_costs_df,
             cost_transmission_line=self.config_parser.get_cost_transmission_line(),
             logger=self.logger,
-            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/transmission/{year}/problems"),
+            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/transmission/problems"),
             expansion_enabled=self.config_parser.get_expansion_enabled(),
         )
 
@@ -144,6 +146,10 @@ class EnergyModelClass:
         transmission_solver.print_xml(
             name=f"transmission_problem_{time}.xml",
         )
+
+        output_folder = self.solve_folder(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/transmission"))
+        self.update_demand(time, output_folder)
+        self.logger.debug(f"Transmission problem solved for time {time}")
 
     def check_convergence(self, marginal_costs_df):
         self.logger.info("Checking convergence of marginal costs")
@@ -157,21 +163,83 @@ class EnergyModelClass:
         self.marginal_costs_df = marginal_costs_df
         return False
     
+    def update_demand(self, time, output_folder):
+        self.logger.info("Updating demand based on transmission problem results")
+        file = os.listdir(output_folder)[0]
+        
+        file_path = os.path.join(output_folder, file)
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+
+        transmission_results = []
+        for assignment in root.findall("assignment"):
+            variable = assignment.attrib["variable"]
+            value = int(assignment.attrib["value"])
+            if variable.startswith("transmission_"):
+                _, country1, country2 = variable.split("_")
+                self.demand_map[time][country1]['demand'] += value
+
+        for c in self.countries:    
+            self.demand_map[time][c]['marginal_demand'] = self.demand_map[time][c]['demand'] * self.delta_marginal_cost
+
     def update_data(self, year):
-        raise NotImplementedError("Data update not implemented yet")
+        self.logger.debug(f"Updating data for year {year}")
+
+        base_folder = os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}")
+        
+        # Store max capacities and rate activities
+        max_capacities = defaultdict(int)
+        rate_activities = defaultdict(dict)  # tech -> {timeslice: value}
+
+        for t in self.time_resolution:
+            for problem_type in ["internal"]:
+                output_folder = os.path.join(base_folder, str(t), problem_type, "outputs")
+                if not os.path.exists(output_folder):
+                    continue
+
+                for file_name in os.listdir(output_folder):
+                    if file_name.endswith("_output.xml"):
+                        file_path = os.path.join(output_folder, file_name)
+                        root = ET.parse(file_path).getroot()
+                        for assignment in root.findall("assignment"):
+                            var = assignment.attrib["variable"]
+                            value = int(assignment.attrib["value"])
+                            tech, attr = var.split("_")
+
+                            if attr == "capacity":
+                                max_capacities[tech] = max(max_capacities[tech], value)
+                            elif attr == "rateActivity":
+                                rate_activities[tech][t] = value
+
+        # Build the final result DataFrame
+        all_techs = set(max_capacities) | set(rate_activities)
+        result_df = pd.DataFrame(index=sorted(all_techs))
+
+        # Add capacity column
+        result_df[f"capacity_{year}"] = result_df.index.map(lambda tech: max_capacities.get(tech, 0))
+
+        # Add rateActivity per timeslice
+        for t in self.time_resolution:
+            result_df[f"rateActivity_{year}_{t}"] = result_df.index.map(
+                lambda tech: rate_activities.get(tech, {}).get(t, 0)
+            )
+        self.results_df = result_df
+
+        if self.config_parser.get_expansion_enabled():
+            raise NotImplementedError("Expansion is not implemented yet.")
     
     def create_internal_DCOP(self, country, time, year):
         self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
-        if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")):
-            os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems"))
+        if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems")):
+            os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems"))
 
         energy_country_class = EnergyAgentClass(
             country=country,
             logger=self.logger,
             data=self.data_parser.get_country_data(country, time),
-            year_split=self.demand_map['year_split'],
-            demand=self.demand_map[country]['demand'],
-            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/internal/{year}/{time}/problems")
+            year_split=self.demand_map[time]['year_split'],
+            demand=self.demand_map[time][country]['demand'],
+            xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems")
         )
         energy_country_class.generate_xml(
             domains=self.create_domains(problem_type='internal')
@@ -186,7 +254,7 @@ class EnergyModelClass:
         self.logger.debug(f"Solving DCOP for {input_path} and saving to {output_path}")
         java_command = [
             'java', 
-            '-Xmx2G', 
+            '-Xmx1G', 
             '-cp', 
             'frodo2.18.1.jar:junit-4.13.2.jar:hamcrest-core-1.3.jar', 
             'frodo2.algorithms.AgentFactory', 
@@ -199,10 +267,16 @@ class EnergyModelClass:
         ]
         java_process = subprocess.Popen(java_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = java_process.communicate()
+        
+        # Log both stdout and stderr from the Java process
+        if stdout:
+            self.logger.info(f"Java stdout for {input_path}:\n{stdout.decode()}")
+        if stderr:
+            self.logger.error(f"Java stderr for {input_path}:\n{stderr.decode()}")
         if java_process.returncode == 0:
             self.logger.info(f"Java program finished successfully for {input_path}.")
         else:
-            self.logger.error(f"Java program encountered an error for {input_path}:\n{stderr.decode()}")
+            self.logger.error(f"Java program encountered an error for {input_path}.")
 
     def solve_folder(self, folder):
         problem_folder = os.path.join(folder, f"problems")

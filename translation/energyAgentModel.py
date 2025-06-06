@@ -12,7 +12,7 @@ class EnergyAgentClass:
         self.logger = logger
         self.data = data
         self.year_split = year_split
-        self.demand = demand / year_split
+        self.demand = demand 
         self.demand_constraint = None
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
         self.logger.debug(f"EnergyAgentClass initialized for {country}")
@@ -26,39 +26,50 @@ class EnergyAgentClass:
         self.xml_generator.add_domains(domains)
         
         self.tech_df = self.data.copy().drop_duplicates(subset=['TECHNOLOGY'], keep='first').set_index('TECHNOLOGY')
-        self.tech_df['FACTOR'] = self.tech_df['CAPACITY_FACTOR'] * self.tech_df['AVAILABILITY_FACTOR'] * self.tech_df['CAPACITY_TO_ACTIVITY_UNIT']
+        total_technologies = len(self.tech_df)
+        self.tech_df['FACTOR'] = self.tech_df['CAPACITY_FACTOR'] * self.tech_df['AVAILABILITY_FACTOR'] * self.tech_df['CAPACITY_TO_ACTIVITY_UNIT'] * self.year_split
         self.tech_df['FACTOR'] = self.tech_df['FACTOR'].fillna(0)  # Replace NaN factors with zero
         self.tech_df = self.tech_df[self.tech_df['FACTOR'] > 0]
+        self.tech_df = self.tech_df[
+            self.tech_df['CAPITAL_COST'].notna() &
+            self.tech_df['VARIABLE_COST'].notna() &
+            self.tech_df['FIXED_COST'].notna()
+        ]
+        #self.tech_df['VARIABLE_COST'] = self.tech_df['VARIABLE_COST'].apply(lambda x: min(x, 999) if pd.notna(x) else x)
+
+        if total_technologies < len(self.tech_df):
+            self.logger.warning(f"Filtered out {total_technologies - len(self.tech_df)} technologies with zero factor or missing costs.")
+            self.logger.warning(f"Remaining technologies used for {self.name} optimization: {len(self.tech_df)}")
 
         for var in self.tech_df.index:
             self.xml_generator.add_variable(name=f"{var}_capacity", domain='capacity_domain', agent=self.name)
             self.xml_generator.add_variable(name=f"{var}_rateActivity", domain='rateActivity_domain', agent=self.name)
 
-        
         for technology, row in self.tech_df.iterrows():
-            if pd.notna(row['MIN_INSTALLED_CAPACITY']) and row['MIN_INSTALLED_CAPACITY'] > 0:
+            if pd.notna(row['MIN_INSTALLED_CAPACITY']) and round(row['MIN_INSTALLED_CAPACITY']) > 0:
                 self.xml_generator.add_minimum_capacity_constraint(
                     variable_name=f"{technology}_capacity",
                     min_capacity=round(row['MIN_INSTALLED_CAPACITY'])
                 )
-            if row['CAPITAL_COST'] > 0:
-                self.xml_generator.add_installing_cost_minimization_constraint(
-                    variable_capacity_name=f"{technology}_capacity",
-                    previous_installed_capacity=round(row['MIN_INSTALLED_CAPACITY']) if pd.notna(row['MIN_INSTALLED_CAPACITY']) else 0,
-                    cost_per_MW=round(row['CAPITAL_COST']),
-                    extra_name=f"capital_cost"
-                )
+            # Assuming $
+            self.xml_generator.add_cost_constraint(
+                variable_capacity_name=f"{technology}_capacity",
+                rateActivity_variable=f"{technology}_rateActivity",
+                previous_installed_capacity=round(row['MIN_INSTALLED_CAPACITY']) if pd.notna(row['MIN_INSTALLED_CAPACITY']) else 0,
+                capital_cost=round(row['CAPITAL_COST']/row['OPERATIONAL_LIFETIME']),
+                variable_cost=round(row['VARIABLE_COST']),
+                fixed_cost=round(row['FIXED_COST'] * self.year_split),
+            )
             self.xml_generator.add_maximum_activity_rate_constraint(
                 cap_variable=f"{technology}_capacity",
                 capActivity_variable=f"{technology}_rateActivity",
-                factor=row['FACTOR'],
+                factor=row['FACTOR']*100,
+                div_weight=100,
             )
-            # Add constraint on fixed cost
-            # Add constraint on variable costF
 
         self.demand_constraint = self.xml_generator.add_minimum_demand_constraint(
             variables = [f"{var}_rateActivity" for var in self.tech_df.index],
-            demand = round(self.demand),
+            demand = round(self.demand * self.year_split),
             extra_name = f"0"
         )
 

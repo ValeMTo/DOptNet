@@ -855,7 +855,28 @@ class XMLGeneratorClass:
 
         if len(variables) > self.max_arity:
             self.max_arity = len(variables)
-    
+
+    def add_cost_constraint(self, variable_capacity_name, rateActivity_variable, previous_installed_capacity, capital_cost, variable_cost, fixed_cost):
+        """Adds a soft constraint to the XML instance for cost."""
+        if not self.find_function("cost_constraint"):
+            self.add_function(
+                name="cost_constraint", 
+                parameters="int capacity int rateActivity int previous_installed_capacity int capital_cost int variable_cost int fixed_cost",
+                functional=add(
+                    mul(sub("capacity", "previous_installed_capacity"), "capital_cost"),
+                    add(div(mul("rateActivity", "variable_cost"), 1000000), div(mul("capacity", "fixed_cost"), 1000))
+                )
+            )
+
+        self.add_constraint(
+            name=f"cost_constraint_{variable_capacity_name.replace('_capacity', '')}",
+            arity=2,
+            scope=variable_capacity_name + " " + rateActivity_variable,
+            reference="cost_constraint",
+            parameters=f"{variable_capacity_name} {rateActivity_variable} {previous_installed_capacity} {capital_cost} {variable_cost} {fixed_cost}"
+        )
+
+
     def add_operating_cost_minimization_constraint(self, weight, variable_capacity_name, variable__rateActivity_name, cost_per_MWh):
         """Adds a soft constraint to the XML instance that enforces maximum operating cost."""
 
