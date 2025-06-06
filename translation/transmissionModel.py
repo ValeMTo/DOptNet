@@ -6,11 +6,11 @@ import os
 from itertools import product
 
 class TransmissionModelClass:
-    def __init__(self, countries, data, delta_demand_map, marginal_costs_df, cost_transmission_line, logger, xml_file_path, expansion_enabled):
+    def __init__(self, countries, data, delta_demand_map, year_split, marginal_costs_df, cost_transmission_line, logger, xml_file_path, expansion_enabled):
         self.countries = countries
         self.data = data
         self.delta_demand_map = delta_demand_map
-        self.year_split = self.delta_demand_map['year_split']
+        self.year_split = year_split
         self.marginal_costs_df = marginal_costs_df
         self.cost_transmission_line = cost_transmission_line
         self.logger = logger
