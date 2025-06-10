@@ -12,7 +12,7 @@ class EnergyAgentClass:
         self.logger = logger
         self.data = data
         self.year_split = year_split
-        self.demand = demand 
+        self.demand = demand # Total demand in the country for the year in that time resolution
         self.demand_constraint = None
         self.xml_generator = XMLGeneratorClass(logger = self.logger)
         self.logger.debug(f"EnergyAgentClass initialized for {country}")
@@ -25,7 +25,7 @@ class EnergyAgentClass:
         self.xml_generator.add_agents([self.name])
         self.xml_generator.add_domains(domains)
         
-        self.tech_df = self.data.copy().drop_duplicates(subset=['TECHNOLOGY'], keep='first').set_index('TECHNOLOGY')
+        self.tech_df = self.data
         total_technologies = len(self.tech_df)
         self.tech_df['FACTOR'] = self.tech_df['CAPACITY_FACTOR'] * self.tech_df['AVAILABILITY_FACTOR'] * self.tech_df['CAPACITY_TO_ACTIVITY_UNIT'] * self.year_split
         self.tech_df['FACTOR'] = self.tech_df['FACTOR'].fillna(0)  # Replace NaN factors with zero
@@ -35,6 +35,7 @@ class EnergyAgentClass:
             self.tech_df['VARIABLE_COST'].notna() &
             self.tech_df['FIXED_COST'].notna()
         ]
+        self.tech_df = self.tech_df[-1:]
         #self.tech_df['VARIABLE_COST'] = self.tech_df['VARIABLE_COST'].apply(lambda x: min(x, 999) if pd.notna(x) else x)
 
         if total_technologies < len(self.tech_df):
@@ -56,9 +57,9 @@ class EnergyAgentClass:
                 variable_capacity_name=f"{technology}_capacity",
                 rateActivity_variable=f"{technology}_rateActivity",
                 previous_installed_capacity=round(row['MIN_INSTALLED_CAPACITY']) if pd.notna(row['MIN_INSTALLED_CAPACITY']) else 0,
-                capital_cost=round(row['CAPITAL_COST']/row['OPERATIONAL_LIFETIME']),
+                capital_cost=round((row['CAPITAL_COST']/row['OPERATIONAL_LIFETIME'])/10**6), # convert to million currency units
                 variable_cost=round(row['VARIABLE_COST']),
-                fixed_cost=round(row['FIXED_COST'] * self.year_split),
+                fixed_cost=round((row['FIXED_COST'] * self.year_split) / 10**3)  # convert to thousand currency units,
             )
             self.xml_generator.add_maximum_activity_rate_constraint(
                 cap_variable=f"{technology}_capacity",
@@ -69,7 +70,7 @@ class EnergyAgentClass:
 
         self.demand_constraint = self.xml_generator.add_minimum_demand_constraint(
             variables = [f"{var}_rateActivity" for var in self.tech_df.index],
-            demand = round(self.demand * self.year_split),
+            demand = round(self.demand),
             extra_name = f"0"
         )
 

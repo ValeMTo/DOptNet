@@ -39,6 +39,7 @@ class EnergyModelClass:
         self.marginal_costs_df = None
         self.results_df = None
         self.demand_map = {}
+        self.data = {}
 
     def create_logger(self, log_level, log_file):
         log_dir = os.path.dirname(log_file)
@@ -71,12 +72,13 @@ class EnergyModelClass:
             self.solve_year(year)
             self.update_data(year)
         self.logger.info("Energy model solved")
-        self.results_df.to_csv(self.config_parser.get_output_file_path() + f"/results.csv")
     
     def solve_year(self, year):
         self.logger.info(f"Solving the energy model for {year}")
+        self.data[year] = {}
         
         for t in tqdm(self.time_resolution, desc=f"Solving year {year}"):
+            self.data[year][t] = {}
             self.build_demand_map(year, t)
             marginal_costs_df = self.solve_internal_DCOP(t, year)
             for k in tqdm(range(self.max_iteration), desc=f"Solving time {t} for year {year}"):
@@ -120,8 +122,21 @@ class EnergyModelClass:
                 root = tree.getroot()
                 valuation = root.attrib.get("valuation")
 
+                costs = 0
+                for assignment in root.findall("assignment"):
+                    var = assignment.attrib["variable"]
+                    value = int(assignment.attrib["value"])
+                    tech, attr = var.split("_")
+
+                    if attr == "capacity":
+                        costs += value * (self.data[year][t][tech]['capital_cost'] - self.data[year][t][tech]['min_installed_capacity']) 
+                        costs += value * self.data[year][t][tech]['fixed_cost'] * self.demand_map[t]['year_split']
+                    elif attr == "rateActivity":
+                        costs += value * self.data[year][t][tech]['variable_cost']
+
+
                 self.logger.debug(f"Processing file {file_name} with valuation {valuation}")
-                df.at[country, demand] = int(valuation) * 1e3  # Convert to k$ from M$
+                df.at[country, demand] = costs
                 df.at[country, "marginal_demand"] = self.demand_map[t][country]['marginal_demand']
         df['MC_import'] = (df["0"] - df[f"-{self.delta_marginal_cost}"]) / (df['marginal_demand'])
         df['MC_export'] = (df[f"+{self.delta_marginal_cost}"] - df["0"]) / (df['marginal_demand'])
@@ -142,7 +157,7 @@ class EnergyModelClass:
             expansion_enabled=self.config_parser.get_expansion_enabled(),
         )
 
-        transmission_solver.generate_xml(domains=self.create_domains(problem_type='transmission'))
+        transmission_solver.generate_xml(domains=self.create_domains(country=None, time=None, problem_type='transmission'))
         transmission_solver.print_xml(
             name=f"transmission_problem_{time}.xml",
         )
@@ -171,7 +186,6 @@ class EnergyModelClass:
         tree = ET.parse(file_path)
         root = tree.getroot()
 
-        transmission_results = []
         for assignment in root.findall("assignment"):
             variable = assignment.attrib["variable"]
             value = int(assignment.attrib["value"])
@@ -223,26 +237,47 @@ class EnergyModelClass:
             result_df[f"rateActivity_{year}_{t}"] = result_df.index.map(
                 lambda tech: rate_activities.get(tech, {}).get(t, 0)
             )
-        self.results_df = result_df
+        if self.results_df is None:
+            self.results_df = result_df
+        else:
+            # Combine with previous results, aligning on index and columns
+            self.results_df = pd.concat([self.results_df, result_df], axis=0, sort=False)
+            self.results_df = self.results_df[~self.results_df.index.duplicated(keep='last')]
+        self.results_df['TECHNOLOGY'] = self.results_df.index
+        self.results_df['COUNTRY'] = self.results_df['TECHNOLOGY'].apply(lambda x: x[:2])
+        self.results_df.to_csv(self.config_parser.get_output_file_path() + f"/results.csv")
 
         if self.config_parser.get_expansion_enabled():
             raise NotImplementedError("Expansion is not implemented yet.")
+        
+    def extract_costs(self, data, year, time):
+        self.logger.debug("Extracting costs from the data")
+        for tech, row in data.iterrows():
+            self.data[year][time][tech] = {
+                'capital_cost': row['CAPITAL_COST'],
+                'variable_cost': row['VARIABLE_COST'],
+                'fixed_cost': row['FIXED_COST'],
+                'min_installed_capacity': row['MIN_INSTALLED_CAPACITY'] if pd.notna(row['MIN_INSTALLED_CAPACITY']) else 0,
+                'operational_lifetime': row['OPERATIONAL_LIFETIME'],
+            }
     
     def create_internal_DCOP(self, country, time, year):
         self.logger.debug(f"Creating internal DCOP for {country} at time {time} and year {year}")
         if not os.path.exists(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems")):
             os.makedirs(os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems"))
 
+        data = self.data_parser.get_country_data(country, time)
+        self.extract_costs(data, year, time)
         energy_country_class = EnergyAgentClass(
             country=country,
             logger=self.logger,
-            data=self.data_parser.get_country_data(country, time),
+            data=data,
             year_split=self.demand_map[time]['year_split'],
             demand=self.demand_map[time][country]['demand'],
             xml_file_path=os.path.join(self.config_parser.get_output_file_path(), f"DCOP/{year}/{time}/internal/problems")
         )
         energy_country_class.generate_xml(
-            domains=self.create_domains(problem_type='internal')
+            domains=self.create_domains(country=country, time=time, problem_type='internal')
         )
         energy_country_class.print_xml(f"{country}_0.xml")
         energy_country_class.change_demand(demand_variation_percentage=self.delta_marginal_cost)
@@ -310,17 +345,24 @@ class EnergyModelClass:
                     if "valuation" not in root.attrib:
                         self.logger.error(f"File {file_name} is missing the 'valuation' parameter.")
                         raise ValueError(f"File {file_name} is missing the 'valuation' parameter.")
+                    if not root.attrib["valuation"].isdigit():
+                        self.logger.error(f"File {file_name} has an invalid 'valuation' parameter: {root.attrib['valuation']}")
+                        raise ValueError(f"File {file_name} as infinity as 'valuation' parameter: {root.attrib['valuation']}")
                 except ET.ParseError as e:
                     self.logger.error(f"Error parsing XML file {file_name}: {e}")
                     raise ValueError(f"Error parsing XML file {file_name}: {e}")
 
         return output_folder
     
-    def create_domains(self, problem_type='internal'):
+    def create_domains(self, country, time, problem_type='internal'):
         self.logger.debug(f"Creating domains for {problem_type} problem in the model")
         domains = self.config_parser.get_domains()
 
         if problem_type == 'internal':
+            if country is None or time is None:
+                self.logger.error("Country and year must be provided for internal problem type.")
+                raise ValueError("Country and year must be provided for internal problem type.")
+            
             domains_mapping = {
                 'capacity_domain': range(
                     domains['capacity']['min'],
@@ -328,9 +370,9 @@ class EnergyModelClass:
                     domains['capacity']['step']
                 ),
                 'rateActivity_domain': range(
-                    domains['rateActivity']['min'],
-                    domains['rateActivity']['max'] + 1,
-                    domains['rateActivity']['step']
+                    0,
+                    round(self.demand_map[time][country]['demand'] + self.demand_map[time][country]['demand']/100),
+                    round(self.demand_map[time][country]['demand']/100)
                 )
             }
             return domains_mapping

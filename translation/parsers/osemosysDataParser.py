@@ -28,7 +28,7 @@ class osemosysDataParserClass(dataParserClass):
         demand_df = specified_annual_demand_df.merge(specified_demand_profile_df, on=['FUEL', 'COUNTRY'])
         demand_df['DEMAND_PER_TIMESLICE'] = demand_df['SPECIFIED_ANNUAL_DEMAND'] * demand_df['SPECIFIED_DEMAND_PROFILE']
         try:
-            specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0] # GW
+            specified_demand = demand_df[(demand_df['COUNTRY'] == country) & (demand_df['TIMESLICE'] == timeslice)]['DEMAND_PER_TIMESLICE'].values[0] 
         except IndexError:
             self.logger.error("No demand data found for country %s and timeslice %s", country, timeslice)
             raise ValueError("No demand data found for country %s and timeslice %s" % (country, timeslice))
@@ -39,7 +39,7 @@ class osemosysDataParserClass(dataParserClass):
 
         return year_split_coefficient, specified_demand 
     
-    def load_data(self, year, countries):
+    def load_data(self, year, countries, new_installable_capacity_df=None):
         self.logger.debug("Loading data from Excel file")
         
         dfs = {}
@@ -52,9 +52,9 @@ class osemosysDataParserClass(dataParserClass):
         #dfs['specified_demand_profile'] = self.extract_specified_demand_profile(year=year, timeslices=True)
         #dfs['year_split'] = self.extract_year_split(year=year)
         #dfs['accumulated_annual_demand'] = self.extract_accumulated_annual_demand(year=year) #Fuel only
-        dfs['capital_costs'] = self.extract_capital_costs(year=year, unit='B$')
-        dfs['fixed_costs'] = self.extract_fixed_costs(year=year, unit='M$')
-        dfs['variable_costs'] = self.extract_variable_costs(year=year, unit='M$')
+        dfs['capital_costs'] = self.extract_capital_costs(year=year, unit='$')
+        dfs['fixed_costs'] = self.extract_fixed_costs(year=year, unit='$')
+        dfs['variable_costs'] = self.extract_variable_costs(year=year, unit='$')
         #dfs['discount_rate'] = self.extract_discount_rate()
         dfs['operational_lifetime'] = self.extract_technology_operational_life()
         dfs['total_annual_max_capacity'] = self.extract_total_annual_max_capacity(year=year, unit='MW')
@@ -73,7 +73,7 @@ class osemosysDataParserClass(dataParserClass):
 
         combinations = []
         for country in countries:
-            techs = technologies_df[technologies_df['COUNTRY'] == country]['TECHNOLOGY'][:3]
+            techs = technologies_df[technologies_df['COUNTRY'] == country]['TECHNOLOGY']
             emis = emissions_df[emissions_df['COUNTRY'] == country]['EMISSION']
             fuels = fuels_df[fuels_df['COUNTRY'] == country]['FUEL']
             timeslices = timeslices_df['TIMESLICE']
@@ -84,13 +84,17 @@ class osemosysDataParserClass(dataParserClass):
         for key, df in dfs.items():
             self.merged_df = self.merged_df.merge(df, on=[col for col in df.columns if col in self.merged_df.columns], how='left')
 
+        if new_installable_capacity_df is not None:
+            self.merged_df = self.merged_df.merge(new_installable_capacity_df[['COUNTRY', 'TECHNOLOGY', f'capacity_{year-1}']], on=['COUNTRY', 'TECHNOLOGY'], how='left')
+            self.merged_df['MIN_INSTALLED_CAPACITY'] = self.merged_df[f'capacity_{year-1}'].fillna(0)
+            self.merged_df.drop(columns=[f'capacity_{year-1}'], inplace=True)
         self.logger.debug("Data loaded successfully for year %s", year)
 
     def get_country_data(self, country, time):
         self.logger.debug("Getting data for %s in %s", country, time)
 
         country_data = self.merged_df[(self.merged_df['COUNTRY'] == country) & (self.merged_df['TIMESLICE'] == time)]
-        return country_data
+        return country_data.copy().drop_duplicates(subset=['TECHNOLOGY'], keep='first').set_index('TECHNOLOGY')
 
     def extract_AHA_dataset(self, year):
         aha_df = pd.read_excel("./osemosys_data/input_data/African_Hydropower_Atlas_v2-0_PoliTechM.xlsx", sheet_name='6 - Inputs code and GIS')
