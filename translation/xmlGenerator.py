@@ -230,19 +230,31 @@ class XMLGeneratorClass:
 
     def add_minimum_demand_constraint(self, variables, demand, extra_name):
         """Adds an hard constraint to the XML instance that enforces minimum demand."""
+        def build_recursive(variables):
+            if len(variables) == 1:
+                return variables[0]
+            return add(variables[0], build_recursive(variables[1:]))
         
         self.logger.debug(f"Adding minimum demand constraint with extra_name '{extra_name}' and demand: {demand}")
+        constraint_name = f"minimumDemand_{extra_name}"
         if not isinstance(demand, int):
             raise ValueError("demand must be an integer")
         
-        constraint_name = "minimumDemand_" + extra_name
+        if not self.find_predicate("minimumDemand"):
+            self.add_predicate(
+                name="minimumDemand", 
+                parameters="int demand int " + " int ".join(variables), 
+                functional=boolean_ge(build_recursive(variables), "demand")
+            )
+        
         self.add_constraint(
-            name=constraint_name,
-            arity=len(variables),
+            name=constraint_name, 
+            arity=len(variables), 
             scope=" ".join(variables),
-            reference="global:weightedSum",
-            parameters=f"[ {' '.join([f'{{1 {var}}}' for var in variables])} ] __GT_PLACEHOLDER__ {demand}"
+            reference="minimumDemand",
+            parameters=f"{demand} {' '.join(variables)}"
         )
+
         return constraint_name
 
     def remove_constraint(self, name):
