@@ -439,7 +439,7 @@ class XMLGeneratorClass:
                 self.add_predicate(
                     name="maximumRateActivity_mul", 
                     parameters="int rateActivity int capacity int factor int div_weight", 
-                    functional=boolean_le("rateActivity", div(mul("capacity", "factor"), 'div_weight'))
+                    functional=boolean_le(mul("rateActivity", 'div_weight'), mul("capacity", "factor"))
                 )
         elif 0 <= factor < 1:
             if not self.find_predicate("maximumRateActivity_div"):
